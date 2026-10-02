@@ -1,0 +1,23 @@
+Monitor Pro for DeepSeek Harness
+Copyright 2026 nexmoe and Monitor Pro contributors
+
+Derived from nexmoe/vscode-monitor-pro (Apache License 2.0)
+https://github.com/nexmoe/vscode-monitor-pro
+Upstream snapshot: 36b8f7487d2b6d3b9d6b210e372c18cb824eb25d
+
+Pure modules from the upstream project are vendored under src/upstream:
+- diskSpace.ts: original filesystem/APFS deduplication; generalized structural
+  input types preserve extra Harness fields without importing VS Code types.
+- rawDataAdapter.ts and rawDataTypes.ts: original Go response adapter and types;
+  the snapshot type import points at the extracted local snapshot.ts.
+- snapshot.ts: snapshot types extracted from the original src/systemData.ts,
+  with the GpuCard type inlined; no VS Code lifecycle code is included.
+- prometheusParser.ts: original src/mactop-backend/prometheusParser.ts parser.
+
+The Harness lifecycle, worker service, authenticated RPC route, React dashboard,
+preferences, Agent integration, packaging, documentation and tests are new in
+this adaptation. Native backends are opt-in and externally managed.
+
+systeminformation is distributed as an external npm dependency under its own
+MIT license. DeepSeek Harness runtime packages retain their own licenses.
+Native mactop/Go executables are not included in this package.

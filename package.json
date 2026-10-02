@@ -1,0 +1,50 @@
+{
+  "name": "@nexmoe/dsh-monitor-pro",
+  "version": "0.1.2",
+  "description": "Real-time host resource monitoring for DeepSeek Harness",
+  "type": "module",
+  "license": "Apache-2.0",
+  "author": "nexmoe",
+  "icon": "./icon.svg",
+  "exports": {
+    ".": "./dist/index.js",
+    "./client": "./dist/client.js",
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
+  },
+  "files": ["dist", "locale", "icon.svg", "cordis.patch.yml", "README.md", "README.en.md", "docs", "CHANGELOG.md", "NOTICE", "LICENSE"],
+  "dsh": {
+    "bundle": { "patch": "./cordis.patch.yml" },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": ["@deepseek-ai/dsh-client-ui-layout", "@deepseek-ai/dsh-client-ui-sidebar", "@deepseek-ai/dsh-client-connection", "@deepseek-ai/dsh-client-locale"]
+    }
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test test/*.test.mjs",
+    "check": "pnpm build && pnpm typecheck && pnpm test",
+    "smoke": "node scripts/smoke.mjs"
+  },
+  "dependencies": {
+    "@deepseek-ai/schemastery": "~3.18.4",
+    "systeminformation": "5.33.11"
+  },
+  "engines": { "node": ">=22" },
+  "repository": { "type": "git", "url": "git+https://github.com/nexmoe/dsh-monitor-pro.git" },
+  "homepage": "https://github.com/nexmoe/dsh-monitor-pro#readme",
+  "bugs": { "url": "https://github.com/nexmoe/dsh-monitor-pro/issues" },
+  "keywords": ["deepseek", "harness", "cordis", "monitor", "system-monitor", "cpu", "gpu"],
+  "packageManager": "pnpm@11.7.0",
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "esbuild": "^0.25.9",
+    "typescript": "^5.9.2",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "jsdom": "^26.1.0"
+  }
+}

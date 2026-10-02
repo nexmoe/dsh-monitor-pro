@@ -1,0 +1,8 @@
+- insert:
+    - id: nexmoe-monitor-pro
+      name: '@nexmoe/dsh-monitor-pro'
+      config:
+        intervalMs: 2000
+        historySize: 60
+        source: systeminformation
+        metrics: [cpu, memory, network, diskIO, diskSpace, battery, cpuSpeed, cpuTemp, gpu, power]

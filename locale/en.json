@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Monitor Pro",
+    "description": "Live CPU, memory, network, disk, battery and GPU resources on the Harness host."
+  }
+}
