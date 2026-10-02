@@ -84,6 +84,10 @@ test('shipped Client mounts, resets generations, switches locale, pauses and dis
     replies.push(reply('two', [newSample], 'mactop')); await visiblePoll();
     assert(dom.window.document.body.textContent.includes('History: 1 samples'));
     assert.equal(dom.window.document.querySelector('.mp-card .mp-line').getAttribute('d'), 'M100.00,31.20');
+    await clickButton('Unavailable');
+    assert.equal(dom.window.document.querySelectorAll('.mp-card').length, 0);
+    await clickButton('All');
+    assert.equal(dom.window.document.querySelectorAll('.mp-card').length, 17);
     await clickButton('Display settings');
     const cpuVisibility = dom.window.document.querySelector('.mp-order input');
     await React.act(async () => cpuVisibility.click());

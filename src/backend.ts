@@ -68,9 +68,9 @@ export class BackendManager {
       if (this.closed) throw new Error('Native backend is disposed');
       const port = await freePort();
       if (this.closed) throw new Error('Native backend is disposed');
-      // Headless mactop passes this value directly to ListenAndServe. The
-      // host:port form binds loopback; a bare port would bind every interface.
-      const listen = this.state.source === 'mactop' ? `127.0.0.1:${port}` : String(port);
+      // mactop 2.x prepends a colon and rejects host:port ("too many colons").
+      // Its listener is hardcoded to 127.0.0.1, so ":port" stays on loopback.
+      const listen = this.state.source === 'mactop' ? `:${port}` : String(port);
       const args = this.options.args?.(port) ?? (this.state.source === 'go' ? ['-port', listen] : ['--headless', '--prometheus', listen, '--count', '0']);
       if (this.closed) throw new Error('Native backend is disposed');
       const guard = fileURLToPath(new URL('./backend.guard.js', import.meta.url));

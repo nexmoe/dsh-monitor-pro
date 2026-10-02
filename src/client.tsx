@@ -10,6 +10,24 @@ export const inject = ['slots', 'layout', 'locale', 'connection'];
 function Icon() {
   return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4" strokeLinecap="round" strokeLinejoin="round" /></svg>;
 }
+function SearchIcon() {
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" strokeLinecap="round" /></svg>;
+}
+function RefreshIcon() {
+  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.2-5.5" strokeLinecap="round" /><path d="M20 4v5h-5" strokeLinecap="round" strokeLinejoin="round" /></svg>;
+}
+function PlusIcon() {
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M12 5v14M5 12h14" strokeLinecap="round" /></svg>;
+}
+const GROUPS: Partial<Record<TextKey, Metric[]>> = {
+  groupOverview: ['cpu', 'memory', 'network', 'diskSpace', 'battery'],
+  groupCompute: ['cpuSpeed', 'cpuTemp', 'gpu', 'gpuTemp'],
+  groupMemory: ['memActive', 'memUsed', 'gpuMem'],
+  groupNetwork: ['netRx', 'netTx'],
+  groupStorage: ['diskIO', 'diskRx', 'diskWx'],
+  groupPower: ['power', 'batteryPower'],
+  groupSystem: ['osDistro', 'uptime'],
+};
 function Chart({ history, picks, labels, max, format, mode = 'line', color, signed = false }: { history: Sample[]; picks: ((s: Sample) => number | null)[]; labels: string[]; max?: number; format: (n: number) => string; mode?: ChartMode; color?: string; signed?: boolean }) {
   const all = picks.flatMap(pick => history.map(pick)).filter((n): n is number => n !== null && Number.isFinite(n));
   if (!all.length) return null;
@@ -49,6 +67,8 @@ export function apply(ctx: any): void {
     const [paused, setPaused] = React.useState(false);
     const [settings, setSettings] = React.useState(false);
     const [refresh, setRefresh] = React.useState(0);
+    const [query, setQuery] = React.useState('');
+    const [filter, setFilter] = React.useState<'all' | 'live' | 'unavailable'>('all');
     const [backendBusy, setBackendBusy] = React.useState(false);
     const [dismissed, setDismissed] = React.useState(false);
     async function backendAction(action: string) {
@@ -200,12 +220,31 @@ export function apply(ctx: any): void {
       const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
       const anchor = document.createElement('a'); anchor.href = url; anchor.download = `monitor-pro-${new Date().toISOString().replace(/[:.]/g, '-')}.json`; anchor.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
     };
+    const enabled = prefs.order.filter(m => visibleCards(data?.config.metrics ?? []).includes(m) && !prefs.hidden.includes(m));
+    const needle = query.trim().toLowerCase();
+    const matches = (m: Metric) => {
+      if (needle && !`${t(m)} ${m}`.toLowerCase().includes(needle)) return false;
+      if (filter === 'all' || !sample) return true;
+      const node = content(m);
+      const missing = node === unavailable;
+      return filter === 'unavailable' ? missing : !missing;
+    };
+    const visible = enabled.filter(matches);
     return <div className="mp-page">
       <style>{css}</style>
-      <header className="mp-header"><div><h1><Icon />{t('panel')}</h1><p>{t('intro')}</p></div><div className="mp-toolbar">
-        <button onClick={() => setPaused(p => !p)}>{t(paused ? 'resume' : 'pause')}</button><button onClick={() => setSettings(p => !p)} aria-expanded={settings}>{t(settings ? 'close' : 'settings')}</button><button onClick={download} disabled={!data}>{t('export')}</button>
+      <div className="mp-scroll"><div className="mp-content">
+      <header className="mp-header"><div><h1>{t('panel')}</h1><p>{t('intro')}</p></div><div className="mp-toolbar">
+        <button className="mp-icon" onClick={() => { cursor.current = 0; setRefresh(n => n + 1); }} aria-label={t('refresh')}><RefreshIcon /></button>
+        <button className="mp-primary" onClick={() => setSettings(p => !p)} aria-expanded={settings}><PlusIcon />{t(settings ? 'close' : 'settings')}</button>
       </div></header>
-      <div className="mp-meta"><span className={`mp-status mp-status-${status}`} role="status"><i />{t(status)}</span>
+      <div className="mp-filters" role="tablist" aria-label={t('panel')}>
+        {([['all', 'filterAll'], ['live', 'filterLive'], ['unavailable', 'filterUnavailable']] as const).map(([id, key]) => <button key={id} role="tab" aria-selected={filter === id} className={filter === id ? 'mp-filter mp-filter-active' : 'mp-filter'} onClick={() => setFilter(id)}>{t(key)}</button>)}
+        <span className={`mp-status mp-status-${status}`} role="status"><i />{t(status)}</span>
+        <button className="mp-filter" onClick={() => setPaused(p => !p)}>{t(paused ? 'resume' : 'pause')}</button>
+        <button className="mp-filter" onClick={download} disabled={!data}>{t('export')}</button>
+      </div>
+      <label className="mp-search"><SearchIcon /><input value={query} placeholder={t('searchMetrics')} onChange={e => setQuery(e.target.value)} type="search" /></label>
+      <div className="mp-meta">
         {sample && <><span>{t('host')}: {sample.host.hostname} · {sample.host.platform}/{sample.host.arch}</span><span>{t('uptime')}: {formatUptime(sample.host.uptime, prefs.uptimeFormat)}</span><span>{t('time')}: {new Date(sample.timestamp).toLocaleTimeString()}</span></>}
         {data && <><span>{t('source')}: {data.config.source}</span><span>{t('interval')}: {data.config.intervalMs / 1000} {t('seconds')}</span><span>{t('history')}: {history.length} {t('samples')}</span></>}
       </div>
@@ -233,9 +272,13 @@ export function apply(ctx: any): void {
           <button disabled={i === 0} onClick={() => move(i, -1)} aria-label={`${t('up')} ${t(m)}`}>↑</button><button disabled={i === prefs.order.length - 1} onClick={() => move(i, 1)} aria-label={`${t('down')} ${t(m)}`}>↓</button>
         </div>)}</div><p className="mp-note">{t('configuration')}</p><button onClick={() => setPrefs(defaultPreferences())}>{t('reset')}</button>
       </section>}
-      {!sample ? <p className="mp-empty">{t('loading')}</p> : <div className="mp-cards">{prefs.order.filter(m => visibleCards(data?.config.metrics ?? []).includes(m) && !prefs.hidden.includes(m)).map(m => <section className="mp-card" key={m}><h2>{metric(m, m === 'cpuTemp' && data?.config.source === 'mactop' ? 'SoC' : undefined)}</h2>{content(m)}</section>)}</div>}
-      {data && !data.config.metrics.length && <p className="mp-empty">{t('disabled')}</p>}
+      {!sample ? <div className="mp-empty"><span className="mp-empty-glyph"><Icon /></span><p>{t('loading')}</p></div> : visible.length ? (Object.entries(GROUPS) as [TextKey, Metric[]][]).map(([group, metrics]) => {
+        const items = metrics.filter(m => visible.includes(m));
+        if (!items.length) return null;
+        return <section className="mp-group" key={group}><div className="mp-group-head"><h2>{t(group)}</h2><span>{items.length}</span></div><div className="mp-cards">{items.map(m => <article className="mp-card" key={`${group}-${m}`}><div className="mp-card-main"><h3>{metric(m, m === 'cpuTemp' && data?.config.source === 'mactop' ? 'SoC' : undefined)}</h3>{content(m)}</div></article>)}</div></section>;
+      }) : <div className="mp-empty"><span className="mp-empty-glyph"><Icon /></span><p>{needle ? t('noResults') : t('disabled')}</p></div>}
       {data && <footer className="mp-note">{t(data.config.source === 'go' ? 'goNote' : data.config.source === 'mactop' ? 'mactopNote' : 'networkNote')}</footer>}
+      </div></div>
     </div>;
   }
   ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: PANEL, locale: NS }, Page));

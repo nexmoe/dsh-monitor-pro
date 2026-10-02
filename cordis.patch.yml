@@ -4,5 +4,6 @@
       config:
         intervalMs: 2000
         historySize: 60
-        source: systeminformation
-        metrics: [cpu, memory, network, diskIO, diskSpace, battery, cpuSpeed, cpuTemp, gpu, power]
+        source: auto
+        mactopEnabled: true
+        metrics: [cpu, memActive, memUsed, netRx, netTx, diskRx, diskWx, battery, batteryPower, cpuTemp, cpuSpeed, gpu, gpuTemp, gpuMem, diskSpace, osDistro, uptime]

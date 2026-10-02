@@ -95,7 +95,7 @@ diskMounts: []
 
 `auto` 在 Windows 上选择随包 Go，在 Apple Silicon 上选择托管 mactop，其余平台选择 systeminformation。显式选择某个数据源时始终尊重该选择。原生数据源失败时保留错误和最后一次成功样本，不会自动改用 systeminformation；面板可以重试，或主动切换到 systeminformation。
 
-Go 后端随发布包提供 Windows x64/ARM64 可执行文件，插件选择空闲的 `127.0.0.1` 端口并负责启停，请求 `/api/v1/all`。Apple Silicon 上若未安装 [mactop](https://github.com/context-labs/mactop)，面板会提示用 Homebrew 安装；安装后插件自动以无界面模式启动，并把 Prometheus 地址绑定为 `127.0.0.1`，请求 `/metrics`。`backendUrl` 只用于连接你自行管理的回环服务，插件不会启停该地址上的进程。
+Go 后端随发布包提供 Windows x64/ARM64 可执行文件，插件选择空闲的 `127.0.0.1` 端口并负责启停，请求 `/api/v1/all`。Apple Silicon 上若未安装 [mactop](https://github.com/context-labs/mactop)，面板会提示用 Homebrew 安装；安装后插件自动以无界面模式启动。mactop 2.x 只接受 `:端口` 形式的 Prometheus 地址，并且自己把监听绑在 `127.0.0.1`；插件请求 `/metrics`。`backendUrl` 只用于连接你自行管理的回环服务，插件不会启停该地址上的进程。
 
 选定的原生后端失败时显示错误，保留旧样本及其时间戳，并继续尝试原数据源。SI 某个维度失败时，该维度为空并显示部分失败状态；设备不支持的指标显示 `—`。Go 第一轮吞吐量或计数器重置后的速率为空，等待下一次有效差值。
 

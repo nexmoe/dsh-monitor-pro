@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.1.6] — 2026-10-02
+
+### Changed
+
+- Display settings keep each metric on one row. Labels no longer wrap, and chart, color, digits and order controls stay aligned.
+
+## [0.1.5] — 2026-10-02
+
+### Changed
+
+- Metric rows are compact bordered cards in a two-column grid. Charts and per-core meters stay inside the card instead of stretching across the page.
+
+## [0.1.4] — 2026-10-02
+
+### Fixed
+
+- Managed mactop 2.x now receives a `:port` Prometheus address. Passing `127.0.0.1:port` made ListenAndServe fail with "too many colons" and the panel reported a startup timeout. mactop still binds that port to loopback.
+- The panel uses the same page heading, pill filters, search field and grouped rows as the Harness task and plugin pages.
+
 ## [0.1.3] — 2026-10-02
 
 ### Added
@@ -18,6 +37,7 @@
 ### Fixed
 
 - Each card now formats and colors its own metric instead of inheriting the last rendered card.
+- Managed mactop 2.x now receives a `:port` Prometheus address. Passing `127.0.0.1:port` made ListenAndServe fail with "too many colons" and the panel reported a startup timeout. mactop still binds that port to loopback.
 
 ## [0.1.2] — 2026-10-02
 

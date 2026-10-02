@@ -87,7 +87,7 @@ Host settings affect all windows. Display preferences are browser-local. Hiding 
 
 `auto` selects the bundled Go backend on Windows, managed mactop on Apple Silicon, and systeminformation elsewhere. An explicit source is always respected. A native failure keeps its error and the last successful sample; it does not silently switch to systeminformation. The panel can retry or explicitly switch.
 
-The release includes Windows x64 and ARM64 Go executables. The plugin chooses a free `127.0.0.1` port, starts and stops the process, and reads `/api/v1/all`. On Apple Silicon, the panel offers `brew install mactop` when [mactop](https://github.com/context-labs/mactop) is absent, then starts it headless with Prometheus bound to `127.0.0.1` and reads `/metrics`. `backendUrl` connects to a service you manage; the plugin does not start or stop that process.
+The release includes Windows x64 and ARM64 Go executables. The plugin chooses a free `127.0.0.1` port, starts and stops the process, and reads `/api/v1/all`. On Apple Silicon, the panel offers `brew install mactop` when [mactop](https://github.com/context-labs/mactop) is absent, then starts it headless. mactop 2.x only accepts a `:port` Prometheus address and binds that listener to `127.0.0.1` itself; the plugin reads `/metrics`. `backendUrl` connects to a service you manage; the plugin does not start or stop that process.
 
 Explicit native sources do not silently switch after failures. The last successful sample and its timestamp remain visible with an error. SI dimension failures produce nullable readings and a partial failure status. Unsupported values display `—`. The first Go rate and rates following counter resets remain unavailable until a valid delta exists.
 
