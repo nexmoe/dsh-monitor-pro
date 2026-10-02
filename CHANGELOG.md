@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.17] — 2026-10-03
+
+### Fixed
+
+- The sidebar icon uses the size the sidebar requests and a 2px rounded stroke, so it lines up with the built-in panel icons and labels.
+
 ## [0.1.16] — 2026-10-02
 
 ### Fixed
