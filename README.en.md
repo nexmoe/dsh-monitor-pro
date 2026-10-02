@@ -93,7 +93,7 @@ When Harness provides its tools service, `monitor_snapshot` is registered with n
 
 ## Build and test
 
-From the repository root:
+Source builds require **Node.js 22.13+** because pnpm 11 requires it. From the repository root:
 
 ```sh
 git clone https://github.com/nexmoe/dsh-monitor-pro.git

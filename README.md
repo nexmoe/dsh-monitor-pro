@@ -103,7 +103,7 @@ Harness 提供 tools 服务时，插件注册无参数的 `monitor_snapshot` 工
 
 ## 从源码构建
 
-在仓库根目录执行：
+源码构建要求 **Node.js 22.13+**（pnpm 11 的要求）。在仓库根目录执行：
 
 ```sh
 git clone https://github.com/nexmoe/dsh-monitor-pro.git

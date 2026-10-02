@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Clarified that source builds require Node.js 22.13+ for pnpm 11; installed plugin runtime support remains Node.js 22+.
+
 ## [0.1.2] — 2026-10-02
 
 ### Added
