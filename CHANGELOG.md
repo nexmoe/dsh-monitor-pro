@@ -1,5 +1,65 @@
 # Changelog
 
+## [0.1.16] — 2026-10-02
+
+### Fixed
+
+- The selected filter is styled from aria-selected with a selector that wins over the host button reset, using the same hover surface that is already visible.
+
+## [0.1.15] — 2026-10-02
+
+### Changed
+
+- The live status label is hidden. A status chip appears only when collection fails, goes stale, or is partial.
+
+## [0.1.14] — 2026-10-02
+
+### Fixed
+
+- The selected filter uses a visible tint. The previous surface token matched the page background, so the active chip looked unchanged.
+
+## [0.1.13] — 2026-10-02
+
+### Fixed
+
+- Cards in the same row share one height. Extra disk volumes scroll inside the disk card instead of leaving a gap beside the row.
+
+## [0.1.12] — 2026-10-02
+
+### Changed
+
+- The footer no longer repeats uptime and platform details that already appear on the system cards.
+
+## [0.1.11] — 2026-10-02
+
+### Fixed
+
+- Metric cards flow in columns by their own height, so a short card is no longer paired with a tall empty gap. Disk volumes render in full.
+
+## [0.1.10] — 2026-10-02
+
+### Fixed
+
+- Cards in a row keep their own height instead of stretching to the tallest neighbor. Long disk lists scroll inside the card.
+
+## [0.1.9] — 2026-10-02
+
+### Removed
+
+- The pause view control. The panel always keeps polling while it is open.
+
+## [0.1.8] — 2026-10-02
+
+### Fixed
+
+- The selected filter chip now has a filled background and medium-weight label, so the active choice is visible.
+
+## [0.1.7] — 2026-10-02
+
+### Changed
+
+- Host, uptime, sample time, source, interval and history now appear in the page footer with the collector note.
+
 ## [0.1.6] — 2026-10-02
 
 ### Changed

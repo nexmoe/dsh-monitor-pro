@@ -1,6 +1,6 @@
 {
   "name": "@nexmoe/dsh-monitor-pro",
-  "version": "0.1.6",
+  "version": "0.1.16",
   "description": "Real-time host resource monitoring for DeepSeek Harness",
   "type": "module",
   "license": "Apache-2.0",

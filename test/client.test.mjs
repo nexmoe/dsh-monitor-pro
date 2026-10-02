@@ -10,7 +10,7 @@ import { normalizeConfig, emptySample } from '../dist/types.js';
 // Load the shipped ModuleLoader factory with the host React instance. This is a
 // DOM integration test of mounting, delta/reload behavior and resource cleanup;
 // it does not substitute for installation in a live Harness profile.
-test('shipped Client mounts, resets generations, switches locale, pauses and disposes', async () => {
+test('shipped Client mounts, resets generations, switches locale and disposes', async () => {
   const dom = new JSDOM('<div id="panel"></div>', { url: 'http://localhost', runScripts: 'outside-only', pretendToBeVisual: true });
   const saved = new Map();
   for (const [key, value] of Object.entries({ window: dom.window, document: dom.window.document, localStorage: dom.window.localStorage, IS_REACT_ACT_ENVIRONMENT: true })) {
@@ -93,12 +93,10 @@ test('shipped Client mounts, resets generations, switches locale, pauses and dis
     await React.act(async () => cpuVisibility.click());
     assert.equal(dom.window.document.querySelectorAll('.mp-card').length, 16);
     assert.deepEqual(JSON.parse(dom.window.localStorage.getItem('dsh-monitor-pro:view:v1')).hidden, ['cpu']);
-    await clickButton('Pause view'); const beforePause = requests.length; await visiblePoll();
-    assert.equal(requests.length, beforePause);
-    await React.act(async () => { snapshot = { ...snapshot, active: 'ja' }; notify(); });
-    assert(dom.window.document.body.textContent.includes('表示を一時停止中'));
-    // Resume with no queued reply leaves a live request; unmount must abort it.
-    await clickButton('表示を再開');
+    await React.act(async () => { snapshot = { ...snapshot, active: 'zh' }; notify(); });
+    assert(dom.window.document.body.textContent.includes('实时监控 Harness 主机资源'));
+    // A live request with no queued reply must be aborted when the page unmounts.
+    await visiblePoll();
     const pendingSignal = requests.at(-1).signal;
     await React.act(async () => root.unmount()); root = undefined;
     assert.equal(pendingSignal.aborted, true); assert.equal(listeners.size, 0);

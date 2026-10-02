@@ -64,7 +64,6 @@ export function apply(ctx: any): void {
     const t = (key: TextKey): string => translate(key);
     const [data, setData] = React.useState<Payload | null>(null);
     const [transportError, setTransportError] = React.useState<string | null>(null);
-    const [paused, setPaused] = React.useState(false);
     const [settings, setSettings] = React.useState(false);
     const [refresh, setRefresh] = React.useState(0);
     const [query, setQuery] = React.useState('');
@@ -88,7 +87,6 @@ export function apply(ctx: any): void {
     const generation = React.useRef<string | undefined>(undefined);
     React.useEffect(() => { try { localStorage.setItem(STORAGE, JSON.stringify(prefs)); } catch { /* Private browsers may refuse storage. */ } }, [prefs]);
     React.useEffect(() => {
-      if (paused) return;
       let stopped = false;
       let timer: ReturnType<typeof setTimeout> | undefined;
       let request: AbortController | undefined;
@@ -130,11 +128,11 @@ export function apply(ctx: any): void {
       document.addEventListener('visibilitychange', visible);
       void poll();
       return () => { stopped = true; clearTimeout(timer); request?.abort(); document.removeEventListener('visibilitychange', visible); };
-    }, [paused, refresh]);
+    }, [refresh]);
     const sample = data?.current;
     const history = data?.history ?? [];
-    const stale = !paused && !!sample && now - sample.timestamp > Math.max(15000, (data?.config.intervalMs ?? 2000) * 3);
-    const status = paused ? 'paused' : transportError ? 'error' : stale ? 'stale' : data?.status ?? 'starting';
+    const stale = !!sample && now - sample.timestamp > Math.max(15000, (data?.config.intervalMs ?? 2000) * 3);
+    const status = transportError ? 'error' : stale ? 'stale' : data?.status ?? 'starting';
     const bytes = (n: number | null | undefined, metric: Metric) => formatBytes(n, prefs, false, metric);
     const rate = (n: number | null | undefined, metric: Metric, network = false) => `${formatBytes(n, prefs, network && prefs.networkUnit === 'bits', metric)}/s`;
     const number = (n: number | null | undefined, metric: Metric, suffix = '') => n === null || n === undefined ? '—' : `${formatNumber(n, prefs, metric)}${prefs.showSpace ? suffix : suffix.trimStart()}`;
@@ -181,9 +179,9 @@ export function apply(ctx: any): void {
           {row(t('read'), rate(sample.diskIO.read, m))}{row(t('write'), rate(sample.diskIO.write, m))}
           {chart(m, [s => s.diskIO?.read ?? null, s => s.diskIO?.write ?? null], [t('read'), t('write')], undefined, n => rate(n, m))}
         </>;
-        case 'diskSpace': return !sample.disks.length ? unavailable : <>{sample.disks.map(d => <div key={`${d.fs}:${d.mount}`} className="mp-disk">
+        case 'diskSpace': return !sample.disks.length ? unavailable : <div className="mp-disks">{sample.disks.map(d => <div key={`${d.fs}:${d.mount}`} className="mp-disk">
           {row(d.mount, number(d.use, m, '%'))}<div className="mp-meter"><i style={{ width: `${d.use}%` }} /></div><p className="mp-note">{bytes(d.used, m)} / {bytes(d.size, m)} · {d.fs}</p>
-        </div>)}</>;
+        </div>)}</div>;
         case 'battery': return !sample.battery ? unavailable : <>
           <div className="mp-value">{number(sample.battery.percent, m, '%')}<small>{t(sample.battery.charging ? 'charging' : sample.battery.acConnected ? 'plugged' : 'discharging')}</small></div>
           {row(t('health'), number(sample.battery.health, m, '%'))}{row(t('remaining'), !sample.battery.timeRemaining || sample.battery.timeRemaining >= 2880 || sample.battery.state === 'idle' ? '—' : `${Math.round(sample.battery.timeRemaining)} ${t('minutes')}`)}
@@ -239,15 +237,10 @@ export function apply(ctx: any): void {
       </div></header>
       <div className="mp-filters" role="tablist" aria-label={t('panel')}>
         {([['all', 'filterAll'], ['live', 'filterLive'], ['unavailable', 'filterUnavailable']] as const).map(([id, key]) => <button key={id} role="tab" aria-selected={filter === id} className={filter === id ? 'mp-filter mp-filter-active' : 'mp-filter'} onClick={() => setFilter(id)}>{t(key)}</button>)}
-        <span className={`mp-status mp-status-${status}`} role="status"><i />{t(status)}</span>
-        <button className="mp-filter" onClick={() => setPaused(p => !p)}>{t(paused ? 'resume' : 'pause')}</button>
+        {(status === 'error' || status === 'stale' || status === 'degraded') && <span className={`mp-status mp-status-${status}`} role="status"><i />{t(status)}</span>}
         <button className="mp-filter" onClick={download} disabled={!data}>{t('export')}</button>
       </div>
       <label className="mp-search"><SearchIcon /><input value={query} placeholder={t('searchMetrics')} onChange={e => setQuery(e.target.value)} type="search" /></label>
-      <div className="mp-meta">
-        {sample && <><span>{t('host')}: {sample.host.hostname} · {sample.host.platform}/{sample.host.arch}</span><span>{t('uptime')}: {formatUptime(sample.host.uptime, prefs.uptimeFormat)}</span><span>{t('time')}: {new Date(sample.timestamp).toLocaleTimeString()}</span></>}
-        {data && <><span>{t('source')}: {data.config.source}</span><span>{t('interval')}: {data.config.intervalMs / 1000} {t('seconds')}</span><span>{t('history')}: {history.length} {t('samples')}</span></>}
-      </div>
       {(transportError || data?.error) && <div className="mp-error" role="alert"><span>{transportError ?? data?.error}</span><button onClick={() => { cursor.current = 0; setRefresh(n => n + 1); }}>{t('retry')}</button></div>}
       {!dismissed && data?.backend?.source === 'mactop' && ['missing', 'failed', 'installing'].includes(data.backend.status) && <section className="mp-settings" aria-label="mactop">
         <h2>{t(data.backend.status === 'installing' ? 'installing' : data.backend.status === 'missing' ? 'missing' : 'error')}</h2>
@@ -275,9 +268,15 @@ export function apply(ctx: any): void {
       {!sample ? <div className="mp-empty"><span className="mp-empty-glyph"><Icon /></span><p>{t('loading')}</p></div> : visible.length ? (Object.entries(GROUPS) as [TextKey, Metric[]][]).map(([group, metrics]) => {
         const items = metrics.filter(m => visible.includes(m));
         if (!items.length) return null;
-        return <section className="mp-group" key={group}><div className="mp-group-head"><h2>{t(group)}</h2><span>{items.length}</span></div><div className="mp-cards">{items.map(m => <article className="mp-card" key={`${group}-${m}`}><div className="mp-card-main"><h3>{metric(m, m === 'cpuTemp' && data?.config.source === 'mactop' ? 'SoC' : undefined)}</h3>{content(m)}</div></article>)}</div></section>;
+        return <section className="mp-group" key={group}><div className="mp-group-head"><h2>{t(group)}</h2><span>{items.length}</span></div><div className="mp-cards">{items.map(m => <article className={m === 'diskSpace' ? 'mp-card mp-card-scroll' : 'mp-card'} key={`${group}-${m}`}><div className="mp-card-main"><h3>{metric(m, m === 'cpuTemp' && data?.config.source === 'mactop' ? 'SoC' : undefined)}</h3>{content(m)}</div></article>)}</div></section>;
       }) : <div className="mp-empty"><span className="mp-empty-glyph"><Icon /></span><p>{needle ? t('noResults') : t('disabled')}</p></div>}
-      {data && <footer className="mp-note">{t(data.config.source === 'go' ? 'goNote' : data.config.source === 'mactop' ? 'mactopNote' : 'networkNote')}</footer>}
+      {(sample || data) && <footer className="mp-footer">
+        <div className="mp-meta">
+          {sample && <><span>{t('host')}: {sample.host.hostname}</span><span>{t('time')}: {new Date(sample.timestamp).toLocaleTimeString()}</span></>}
+          {data && <><span>{t('source')}: {data.config.source}</span><span>{t('interval')}: {data.config.intervalMs / 1000} {t('seconds')}</span><span>{t('history')}: {history.length} {t('samples')}</span></>}
+        </div>
+        {data && <p>{t(data.config.source === 'go' ? 'goNote' : data.config.source === 'mactop' ? 'mactopNote' : 'networkNote')}</p>}
+      </footer>}
       </div></div>
     </div>;
   }
