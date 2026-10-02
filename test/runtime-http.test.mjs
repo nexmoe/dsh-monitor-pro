@@ -46,7 +46,7 @@ test('installed Harness admits Monitor RPC, samples and unregisters on unload', 
   client.installConnection({ provide(_name, value) { browserConnection = value; } }, {
     transport: { fetch(input, init) { return fetch(new URL(input, base), { ...init, headers: { ...init.headers, cookie } }); } },
   });
-  const monitor = root.plugin(plugin, { intervalMs: 1000, metrics: ['cpu', 'memory'] });
+  const monitor = root.plugin(plugin, { intervalMs: 1000, source: 'systeminformation', metrics: ['cpu', 'memory'] });
   let activationError;
   try {
     try { await monitor; } catch (error) { activationError = error; }

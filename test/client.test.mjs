@@ -75,7 +75,7 @@ test('shipped Client mounts, resets generations, switches locale, pauses and dis
     root = createRoot(dom.window.document.getElementById('panel'));
     await React.act(async () => root.render(React.createElement(slots.get('main'))));
     assert.equal(listeners.size, 1);
-    assert.equal(dom.window.document.querySelectorAll('.mp-card').length, 10);
+    assert.equal(dom.window.document.querySelectorAll('.mp-card').length, 17);
     assert(dom.window.document.body.textContent.includes('History: 1 samples'));
     assert(dom.window.document.body.textContent.includes('Battery net power'));
     replies.push(reply('one', [second])); await visiblePoll();
@@ -87,7 +87,7 @@ test('shipped Client mounts, resets generations, switches locale, pauses and dis
     await clickButton('Display settings');
     const cpuVisibility = dom.window.document.querySelector('.mp-order input');
     await React.act(async () => cpuVisibility.click());
-    assert.equal(dom.window.document.querySelectorAll('.mp-card').length, 9);
+    assert.equal(dom.window.document.querySelectorAll('.mp-card').length, 16);
     assert.deepEqual(JSON.parse(dom.window.localStorage.getItem('dsh-monitor-pro:view:v1')).hidden, ['cpu']);
     await clickButton('Pause view'); const beforePause = requests.length; await visiblePoll();
     assert.equal(requests.length, beforePause);

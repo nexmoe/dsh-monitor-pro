@@ -8,28 +8,28 @@
 
 [English](README.en.md) · [下载发布包](https://github.com/nexmoe/dsh-monitor-pro/releases/latest) · [与 VS Code 版对比](docs/COMPARISON.md) · [更新记录](CHANGELOG.md)
 
-包名：`@nexmoe/dsh-monitor-pro` · 当前版本：`0.1.2` · 许可证：Apache-2.0。
+包名：`@nexmoe/dsh-monitor-pro` · 当前版本：`0.1.3` · 许可证：Apache-2.0。
 
 监控对象是 **运行 Harness Host 的机器**。远程访问 Harness 时，浏览器所在电脑和被监控电脑可能不同。
 
 ## 功能
 
 - 原生 React 主面板和侧栏入口，跟随 Harness 主题，适配窄屏。
-- 10 类卡片：CPU、内存、网络、磁盘 I/O、磁盘容量、电池、CPU 频率、温度、GPU、功耗。
-- CPU 每核使用率；内存已用/活跃/可用及 Swap；每张 GPU 的使用率曲线、温度和显存读数。
-- 有界历史折线，缺失值断线；电池负功率保留符号并显示零功率参考线。
-- 卡片排序与隐藏，容量单位、网络字节/比特单位、小数位数设置。
+- 17 张卡片：CPU、活跃内存、已用内存、网络收发、磁盘读写、电池、电池功率、CPU 温度、CPU 频率、GPU 使用率、GPU 温度、GPU 显存、磁盘容量、系统信息、运行时间。
+- CPU 每核使用率；内存已用/活跃/可用及 Swap；GPU 使用率、温度和显存可分别显示历史。
+- 折线、条形和每核阵列，缺失值断线；电池负功率保留符号并显示零功率参考线。
+- 卡片排序与隐藏，有效数字、单位空格、缩写单位、容量单位、网络字节/比特单位和运行时间模板。
 - 暂停/恢复显示、采样状态与错误提示、最近采样时间、JSON 导出（当前快照、显示历史和采集配置）。
 - 所有窗口共享 Host Worker 和采集缓存；可选 `monitor_snapshot` Agent 工具。
 - 简体中文、英语、繁体中文、日语。
 
-基础指标已迁移；原版状态栏、图表视图切换、每核温度、GPU 温度/显存独立历史曲线、原生后端安装和进程管理尚未迁移。完整差异见[对比表](docs/COMPARISON.md)。
+Windows 自动使用随包提供的 Go 后端；Apple Silicon 默认自动启用并管理 mactop；其他平台使用 systeminformation。完整差异见[对比表](docs/COMPARISON.md)。
 
 ## 安装
 
 要求 **Node.js 22+**。已核对并测试 **DeepSeek Harness 0.2.0-rc.2** 的 Cordis、Client ModuleLoader、`main` / `sidebar.panellist` 插槽及 Locale 接口。其他版本需要确认这些接口兼容。
 
-1. 从 [GitHub Releases](https://github.com/nexmoe/dsh-monitor-pro/releases/latest) 下载 `nexmoe-dsh-monitor-pro-0.1.2.tgz`。
+1. 从 [GitHub Releases](https://github.com/nexmoe/dsh-monitor-pro/releases/latest) 下载 `nexmoe-dsh-monitor-pro-0.1.3.tgz`。
 2. 在 Harness 中打开「插件 → 安装插件」，填写下载文件的**绝对路径**。
 3. 安装完成后打开侧栏 **Monitor Pro**，首次采样可能需要几秒钟。
 4. 替换已安装版本后，**完全退出并重新启动 Harness**，让 Host 和 Client 载入新版本。
@@ -37,7 +37,7 @@
 例如 macOS 下载到默认目录时，可以填写：
 
 ```text
-/Users/你的用户名/Downloads/nexmoe-dsh-monitor-pro-0.1.2.tgz
+/Users/你的用户名/Downloads/nexmoe-dsh-monitor-pro-0.1.3.tgz
 ```
 
 远程部署时，安装路径必须存在于 Harness Host 上。安装源遇到镜像连接问题时可选择 npm 官方源。本项目通过 GitHub Release 分发，尚未发布到 npm；直接填写包名不会取得这个版本。
@@ -50,26 +50,30 @@
 
 | 字段 | 默认值 | 含义 |
 | --- | --- | --- |
-| `intervalMs` | `2000` | 采样间隔，整数 `1000–60000` 毫秒 |
+| `intervalMs` | `2000` | 采样间隔，整数 `500–60000` 毫秒 |
 | `historySize` | `60` | 历史容量，整数 `10–600` 个采样 |
-| `metrics` | 全部指标 | 指标 ID 列表，空数组关闭指标采集 |
-| `source` | `systeminformation` | `systeminformation`、`mactop` 或 `go` |
-| `backendUrl` | `http://127.0.0.1:8888` | 已运行的本地后端 HTTP origin，仅允许 `127.0.0.1`、`localhost`、`[::1]` |
+| `metrics` | 17 张默认卡片 | 指标 ID 列表，空数组关闭指标采集 |
+| `source` | `auto` | `auto`、`systeminformation`、`mactop` 或 `go` |
+| `mactopEnabled` | `true` | Apple Silicon 自动模式下是否启用托管 mactop |
+| `backendUrl` | `""` | 高级覆盖：已运行的本地后端 HTTP origin，仅允许 `127.0.0.1`、`localhost`、`[::1]`；留空由插件管理 |
 | `networkInterface` | `""` | SI 网卡名，空值汇总活动的非回环接口 |
 | `diskMounts` | `[]` | 磁盘挂载点列表，空值自动去重 |
 
 指标 ID：
 
 ```text
-cpu memory network diskIO diskSpace battery cpuSpeed cpuTemp gpu power
+cpu memActive memUsed netRx netTx diskRx diskWx battery batteryPower
+cpuTemp cpuSpeed gpu gpuTemp gpuMem diskSpace osDistro uptime
 ```
+
+旧的分组 ID（如 `memory`、`network`、`diskIO`、`gpu`、`power`）仍会展开为对应卡片。
 
 仅采集 CPU、内存和指定网卡的示例：
 
 ```yaml
 intervalMs: 2000
 historySize: 120
-source: systeminformation
+source: auto
 metrics: [cpu, memory, network]
 networkInterface: en0
 diskMounts: []
@@ -79,7 +83,7 @@ diskMounts: []
 
 ## 数据源与硬件支持
 
-| 能力 | systeminformation（默认） | mactop | 原项目 Go 服务 |
+| 能力 | systeminformation | mactop（Apple Silicon 默认） | 随包 Go 服务（Windows 默认） |
 | --- | --- | --- | --- |
 | CPU / 内存 | 支持，每核 CPU 可用 | 支持，每核 CPU 可用；活跃内存按已用显示 | 支持，无每核 CPU |
 | 网络 / 磁盘 I/O | 活动网卡汇总 / SI 汇总 | 后端提供的速率 | 首个符合条件的网卡 / 磁盘 |
@@ -89,9 +93,9 @@ diskMounts: []
 | GPU | NVIDIA `nvidia-smi` | Apple Silicon GPU 占用/温度，无显存 | 不提供 |
 | 功耗 | 不提供 | SoC 总功耗 | 有符号电池净功率 |
 
-默认 `systeminformation` 无须启动额外服务。它不会提供 Apple Silicon GPU 或 SoC 功耗；CPU 温度取决于设备支持。若关注这些 Mac 指标，需启用 mactop。
+`auto` 在 Windows 上选择随包 Go，在 Apple Silicon 上选择托管 mactop，其余平台选择 systeminformation。显式选择某个数据源时始终尊重该选择。原生数据源失败时保留错误和最后一次成功样本，不会自动改用 systeminformation；面板可以重试，或主动切换到 systeminformation。
 
-选择 `mactop` 前，自行安装并运行 [mactop](https://github.com/metaspartan/mactop) 的 Prometheus 服务，再将实际端口填入 `backendUrl`；插件请求 `/metrics`。选择 `go` 前，自行启动 [VS Code Monitor Pro 的 Go HTTP 后端](https://github.com/nexmoe/vscode-monitor-pro/tree/main/go-backend)；插件请求 `/api/v1/all`。插件不包含、下载或管理原生可执行文件。
+Go 后端随发布包提供 Windows x64/ARM64 可执行文件，插件选择空闲的 `127.0.0.1` 端口并负责启停，请求 `/api/v1/all`。Apple Silicon 上若未安装 [mactop](https://github.com/context-labs/mactop)，面板会提示用 Homebrew 安装；安装后插件自动以无界面模式启动，并把 Prometheus 地址绑定为 `127.0.0.1`，请求 `/metrics`。`backendUrl` 只用于连接你自行管理的回环服务，插件不会启停该地址上的进程。
 
 选定的原生后端失败时显示错误，保留旧样本及其时间戳，并继续尝试原数据源。SI 某个维度失败时，该维度为空并显示部分失败状态；设备不支持的指标显示 `—`。Go 第一轮吞吐量或计数器重置后的速率为空，等待下一次有效差值。
 

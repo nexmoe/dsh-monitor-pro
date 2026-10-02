@@ -1,5 +1,5 @@
 import { MonitorService } from '../dist/service.js';
-const service = new MonitorService({ intervalMs: 2000 });
+const service = new MonitorService({ intervalMs: 2000, source: 'systeminformation' });
 try {
   await service.sample();
   await new Promise(resolve => setTimeout(resolve, 1200));

@@ -1,0 +1,169 @@
+Native backend third-party notices
+==================================
+
+This directory contains the Go monitoring backend copied from
+nexmoe/vscode-monitor-pro. The upstream backend sources and tests are preserved
+verbatim. See the repository's general NOTICE for the upstream project
+attribution. The dependency notices below apply to the native executables and
+do not replace any upstream copyright or license terms.
+
+Inventory source: native/go.mod and native/go.sum, resolved with Go 1.26.2.
+Linked modules were checked with go list -deps for windows/amd64,
+windows/arm64, and the local integration target darwin/arm64, all with
+CGO_ENABLED=0. Full upstream license and patent files are preserved verbatim
+in native/LICENSES. Dependencies remain unmodified.
+
+Direct dependencies
+-------------------
+
+github.com/distatus/battery v0.11.0
+  Source: https://github.com/distatus/battery/tree/v0.11.0
+  License: MIT
+  Copyright (C) 2016 Karol 'Kenji Takahashi' Woźniak
+  Source files additionally retain:
+  Copyright (C) 2016-2017,2023 Karol 'Kenji Takahashi' Woźniak
+  License text: LICENSES/distatus-battery-LICENSE.txt
+  Linked in Windows x64, Windows ARM64, and Darwin ARM64.
+
+github.com/shirou/gopsutil/v4 v4.26.4
+  Source: https://github.com/shirou/gopsutil/tree/v4.26.4
+  License: BSD-3-Clause
+  Copyright (c) 2014, WAKAYAMA Shirou. All rights reserved.
+  gopsutil is a Go port of psutil (https://github.com/giampaolo/psutil).
+  Its license also preserves the attribution and full BSD terms for code
+  copied and modified from Go encoding/binary:
+  Copyright (c) 2009 The Go Authors. All rights reserved.
+  License text including both notices: LICENSES/gopsutil-LICENSE.txt
+  Linked in Windows x64, Windows ARM64, and Darwin ARM64.
+
+Indirect production dependency inventory
+----------------------------------------
+
+github.com/ebitengine/purego v0.10.0
+  Source: https://github.com/ebitengine/purego/tree/v0.10.0
+  License: Apache-2.0; copied Go runtime files use BSD-3-Clause.
+  Copyright notices: LICENSES/purego-NOTICES.txt
+  License text: LICENSES/purego-LICENSE.txt
+  Copied Go code license: LICENSES/go-LICENSE.txt
+  Linked in Darwin ARM64; not linked in either Windows executable.
+
+github.com/go-ole/go-ole v1.2.6
+  Source: https://github.com/go-ole/go-ole/tree/v1.2.6
+  License: MIT
+  Copyright © 2013-2017 Yasuhiro Matsumoto, <mattn.jp@gmail.com>
+  License text: LICENSES/go-ole-LICENSE.txt
+  Linked in both Windows executables; not linked in Darwin ARM64.
+
+github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0
+  Source: https://github.com/lufia/plan9stats/tree/39d0f177ccd0
+  License: BSD-3-Clause
+  Copyright (c) 2019, KADOTA, Kyohei. All rights reserved.
+  License text: LICENSES/plan9stats-LICENSE.txt
+  Plan 9 dependency; not linked in the Windows or Darwin ARM64 executables.
+
+github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55
+  Source: https://github.com/power-devops/perfstat/tree/82ca36839d55
+  License: MIT
+  Copyright (c) 2020 Power DevOps
+  License text: LICENSES/perfstat-LICENSE.txt
+  AIX dependency; not linked in the Windows or Darwin ARM64 executables.
+
+github.com/tklauser/go-sysconf v0.3.16
+  Source: https://github.com/tklauser/go-sysconf/tree/v0.3.16
+  License: BSD-3-Clause
+  Copyright (c) 2018-2022, Tobias Klauser. All rights reserved.
+  License text: LICENSES/go-sysconf-LICENSE.txt
+  Linked in Darwin ARM64; not linked in either Windows executable.
+
+github.com/tklauser/numcpus v0.11.0
+  Source: https://github.com/tklauser/numcpus/tree/v0.11.0
+  License: Apache-2.0
+  Copyright 2018-2022 Tobias Klauser
+  Source copyright notices: LICENSES/numcpus-NOTICES.txt
+  License text: LICENSES/numcpus-LICENSE.txt
+  Platform-specific dependency in go.mod; not linked in the Windows or
+  Darwin ARM64 executables built here.
+
+github.com/yusufpapurcu/wmi v1.2.4
+  Source: https://github.com/yusufpapurcu/wmi/tree/v1.2.4
+  License: MIT
+  Copyright (c) 2013 Stack Exchange
+  License text: LICENSES/wmi-LICENSE.txt
+  Linked in both Windows executables; not linked in Darwin ARM64.
+
+golang.org/x/sys v0.41.0
+  Source: https://cs.opensource.google/go/x/sys/+/refs/tags/v0.41.0
+  License: BSD-3-Clause, with an additional patent grant.
+  Copyright 2009 The Go Authors.
+  License text: LICENSES/golang-x-sys-LICENSE.txt
+  Patent grant: LICENSES/golang-x-sys-PATENTS.txt
+  Linked in Windows x64, Windows ARM64, and Darwin ARM64.
+
+howett.net/plist v1.0.0
+  Source: https://github.com/DHowett/go-plist/tree/v1.0.0
+  License: BSD-2-Clause, with BSD-3-Clause terms for copied Go code.
+  Copyright (c) 2013, Dustin L. Howett. All rights reserved.
+  Copyright (c) 2012 The Go Authors. All rights reserved.
+  License text including both notices: LICENSES/plist-LICENSE.txt
+  Linked in Darwin ARM64; not linked in either Windows executable.
+
+Go runtime and standard library
+-------------------------------
+
+Go 1.26.2
+  Source: https://go.googlesource.com/go/+/refs/tags/go1.26.2
+  License: BSD-3-Clause, with an additional patent grant.
+  Copyright 2009 The Go Authors.
+  License text: LICENSES/go-LICENSE.txt
+  Patent grant: LICENSES/go-PATENTS.txt
+  Runtime and standard-library code are included in all executables.
+
+The Go 1.26.2 standard library vendors the following modules. These versions
+come from the toolchain's src/vendor/modules.txt; they are separate from the
+application's golang.org/x/sys module. Preserve their notices with the runtime:
+
+  golang.org/x/crypto v0.46.1-0.20251210140736-7dacc380ba00
+    LICENSES/go-vendor-x-crypto-LICENSE.txt
+    LICENSES/go-vendor-x-crypto-PATENTS.txt
+  golang.org/x/net v0.47.1-0.20251128220604-7c360367ab7e
+    LICENSES/go-vendor-x-net-LICENSE.txt
+    LICENSES/go-vendor-x-net-PATENTS.txt
+  golang.org/x/sys v0.39.0
+    LICENSES/go-vendor-x-sys-LICENSE.txt
+    LICENSES/go-vendor-x-sys-PATENTS.txt
+  golang.org/x/text v0.32.0
+    LICENSES/go-vendor-x-text-LICENSE.txt
+    LICENSES/go-vendor-x-text-PATENTS.txt
+
+Each is licensed under BSD-3-Clause with an additional patent grant and
+retains "Copyright 2009 The Go Authors." Compiler-only dependencies are not
+bundled with the monitor executables.
+
+Additional resolved module graph inventory
+------------------------------------------
+
+The following modules occur in `go list -m all` through upstream test or
+historical module metadata. They are not application production dependencies
+and are not linked in the Windows or Darwin ARM64 executables. They are listed
+to account for the complete resolved graph; their source packages are not
+redistributed in the native binary package.
+
+  github.com/davecgh/go-spew v1.1.1
+  github.com/google/go-cmp v0.7.0
+  github.com/jessevdk/go-flags v1.4.0
+  github.com/pmezard/go-difflib v1.0.0
+  github.com/stretchr/testify v1.11.1
+  golang.org/x/xerrors v0.0.0-20191204190536-9bdfabe68543
+  gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405
+  gopkg.in/yaml.v1 v1.0.0-20140924161607-9f9df34309c0
+  gopkg.in/yaml.v3 v3.0.1
+
+Updating the inventory
+----------------------
+
+When native/go.mod, native/go.sum, target platforms, or the Go toolchain version
+changes, regenerate the resolved and linked inventories before packaging.
+Copy the new upstream LICENSE, NOTICE, COPYING and PATENTS files without
+rewriting their text, retain source copyright notices, and update this file.
+Distribute this file and the complete native/LICENSES directory alongside both
+Windows executables.

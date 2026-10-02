@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { METRICS, type Metric, type Payload, type Sample } from './types.js';
 import { en, zh, zhTw, ja, type TextKey } from './locales.js';
-import { defaultPreferences, parsePreferences, formatBytes, formatUptime, chartPath, type ViewPreferences } from './view.js';
+import { defaultPreferences, parsePreferences, visibleCards, formatBytes, formatNumber, formatUptime, aggregateGpu, chartPath, type ViewPreferences, type ChartMode } from './view.js';
 import css from './style.css';
 const PANEL = 'monitor-pro';
 const NS = '@nexmoe/dsh-monitor-pro';
@@ -10,18 +10,22 @@ export const inject = ['slots', 'layout', 'locale', 'connection'];
 function Icon() {
   return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4" strokeLinecap="round" strokeLinejoin="round" /></svg>;
 }
-function Chart({ history, picks, labels, max, format }: { history: Sample[]; picks: ((s: Sample) => number | null)[]; labels: string[]; max?: number; format: (n: number) => string }) {
+function Chart({ history, picks, labels, max, format, mode = 'line', color, signed = false }: { history: Sample[]; picks: ((s: Sample) => number | null)[]; labels: string[]; max?: number; format: (n: number) => string; mode?: ChartMode; color?: string; signed?: boolean }) {
   const all = picks.flatMap(pick => history.map(pick)).filter((n): n is number => n !== null && Number.isFinite(n));
   if (!all.length) return null;
-  const ceiling = max ?? Math.max(1, ...all) * 1.15;
-  const floor = Math.min(0, ...all) * 1.15;
+  const ceiling = max ?? (signed ? Math.max(1, ...all.map(Math.abs)) : Math.max(1, ...all));
+  const floor = signed ? -ceiling : Math.min(0, ...all);
   const zeroY = 36 - (0 - floor) / Math.max(1, ceiling - floor) * 32;
   return <div className="mp-chart">
     <div className="mp-axis"><span>{format(ceiling)}</span><span>{floor < 0 ? format(floor) : '0'}</span></div>
     <svg viewBox="0 0 100 40" preserveAspectRatio="none" role="img" aria-label={labels.join(' / ')}>
       {[4, 20, 36].map(y => <path key={y} d={`M0 ${y}H100`} className="mp-gridline" vectorEffect="non-scaling-stroke" />)}
       {floor < 0 && <path d={`M0 ${zeroY}H100`} className="mp-gridline" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />}
-      {picks.map((pick, i) => <path key={i} d={chartPath(history.map(s => ({ timestamp: s.timestamp, value: pick(s) })), ceiling, floor)} className={`mp-line mp-line-${i}`} vectorEffect="non-scaling-stroke" />)}
+      {picks.map((pick, i) => mode === 'bar' ? history.map((s, index) => {
+        const value = pick(s); if (value === null || !Number.isFinite(value)) return null;
+        const y = 36 - (value - floor) / Math.max(1, ceiling - floor) * 32;
+        return <rect key={`${i}-${index}`} x={index * 100 / history.length} y={Math.min(y, zeroY)} width={Math.max(.2, 90 / history.length / picks.length)} height={Math.max(.2, Math.abs(y - zeroY))} fill={color ?? ['#67b9ed', '#c594f4'][i % 2]} />;
+      }) : <path key={i} d={chartPath(history.map(s => ({ timestamp: s.timestamp, value: pick(s) })), ceiling, floor)} className={`mp-line mp-line-${i % 2}`} style={color ? { stroke: color } : undefined} vectorEffect="non-scaling-stroke" />)}
     </svg>
     <div className="mp-legend">{labels.map((label, i) => <span key={i}><i className={`mp-dot mp-dot-${i}`} />{label}</span>)}</div>
   </div>;
@@ -45,6 +49,17 @@ export function apply(ctx: any): void {
     const [paused, setPaused] = React.useState(false);
     const [settings, setSettings] = React.useState(false);
     const [refresh, setRefresh] = React.useState(0);
+    const [backendBusy, setBackendBusy] = React.useState(false);
+    const [dismissed, setDismissed] = React.useState(false);
+    async function backendAction(action: string) {
+      setBackendBusy(true);
+      try {
+        const result = await ctx.connection.rpc.call('/api', 'monitor-pro/action', { action });
+        if (!result.ok) throw new Error(result.error.message);
+        cursor.current = 0; setRefresh(n => n + 1); setTransportError(null); setDismissed(false);
+      } catch (error) { setTransportError(String(error)); }
+      finally { setBackendBusy(false); }
+    }
     const [prefs, setPrefs] = React.useState<ViewPreferences>(() => {
       try { return parsePreferences(JSON.parse(localStorage.getItem(STORAGE) ?? 'null')); } catch { return defaultPreferences(); }
     });
@@ -100,51 +115,78 @@ export function apply(ctx: any): void {
     const history = data?.history ?? [];
     const stale = !paused && !!sample && now - sample.timestamp > Math.max(15000, (data?.config.intervalMs ?? 2000) * 3);
     const status = paused ? 'paused' : transportError ? 'error' : stale ? 'stale' : data?.status ?? 'starting';
-    const bytes = (n: number | null | undefined) => formatBytes(n, prefs);
-    const rate = (n: number | null | undefined, network = false) => `${formatBytes(n, prefs, network && prefs.networkUnit === 'bits')}/s`;
-    const number = (n: number | null | undefined, suffix = '') => n === null || n === undefined ? '—' : `${n.toFixed(prefs.decimals)}${suffix}`;
-    const metric = (m: Metric, extra?: string) => t(m === 'power' && sample?.power ? sample.power.kind === 'soc' ? 'socPower' : 'batteryPower' : m) + (extra ? ` · ${extra}` : '');
+    const bytes = (n: number | null | undefined, metric: Metric) => formatBytes(n, prefs, false, metric);
+    const rate = (n: number | null | undefined, metric: Metric, network = false) => `${formatBytes(n, prefs, network && prefs.networkUnit === 'bits', metric)}/s`;
+    const number = (n: number | null | undefined, metric: Metric, suffix = '') => n === null || n === undefined ? '—' : `${formatNumber(n, prefs, metric)}${prefs.showSpace ? suffix : suffix.trimStart()}`;
+    const metric = (m: Metric, extra?: string) => t((m === 'power' || m === 'batteryPower') && sample?.power ? sample.power.kind === 'soc' ? 'socPower' : 'batteryPower' : m) + (extra ? ` · ${extra}` : '');
     const row = (label: string, value: string) => <div className="mp-row"><span>{label}</span><strong>{value}</strong></div>;
     const unavailable = <p className="mp-unavailable">{t('unavailable')}</p>;
-    const chart = (picks: ((s: Sample) => number | null)[], labels: string[], max?: number, format = (n: number) => number(n, '%')) => <Chart history={history} picks={picks} labels={labels} max={max} format={format} />;
+    const chart = (m: Metric, picks: ((s: Sample) => number | null)[], labels: string[], max?: number, format = (n: number) => number(n, m, '%')) => {
+      return <Chart history={history} picks={picks} labels={labels} max={max} format={format} mode={prefs.modes[m]} color={prefs.colors[m]} signed={m === 'batteryPower' && sample?.power?.kind === 'battery'} />;
+    };
     function content(m: Metric): React.ReactNode {
       if (!sample) return null;
       switch (m) {
         case 'cpu': return sample.cpu === null ? unavailable : <>
-          <div className="mp-value">{number(sample.cpu, '%')}</div>
-          {chart([s => s.cpu], [t('cpu')], 100)}
-          {prefs.cores && sample.cores.length > 0 && <div className="mp-cores">{sample.cores.map((n, i) => <div key={i} title={`${t('core')} ${i + 1}: ${number(n, '%')}`}><span>{i + 1}</span><div className="mp-meter"><i style={{ width: `${n}%` }} /></div><small>{number(n, '%')}</small></div>)}</div>}
+          <div className="mp-value">{number(sample.cpu, m, '%')}</div>
+          {prefs.modes[m] === 'array' && sample.cores.length ? chart(m, sample.cores.map((_, i) => s => s.cores[i] ?? null), sample.cores.map((_, i) => `${t('core')} ${i + 1}`), 100) : chart(m, [s => s.cpu], [t('cpu')], 100)}
+          {prefs.cores && sample.cores.length > 0 && <div className="mp-cores">{sample.cores.map((n, i) => <div key={i} title={`${t('core')} ${i + 1}: ${number(n, m, '%')}`}><span>{i + 1}</span><div className="mp-meter"><i style={{ width: `${n}%` }} /></div><small>{number(n, m, '%')}</small></div>)}</div>}
         </>;
+        case 'memActive': case 'memUsed': return !sample.memory ? unavailable : <>
+          <div className="mp-value">{bytes(m === 'memActive' ? sample.memory.active : sample.memory.used, m)}<small> / {bytes(sample.memory.total, m)}</small></div>
+          {row(t('available'), bytes(sample.memory.available, m))}{row(t('swap'), `${bytes(sample.memory.swapUsed, m)} / ${bytes(sample.memory.swapTotal, m)}`)}
+          {chart(m, [s => { const value = m === 'memActive' ? s.memory?.active : s.memory?.used; return value !== null && value !== undefined && s.memory?.total ? value / s.memory.total * 100 : null; }], [t(m)], 100)}
+        </>;
+        case 'netRx': case 'netTx': return !sample.network ? unavailable : <>
+          <div className="mp-value">{rate(m === 'netRx' ? sample.network.rx : sample.network.tx, m, true)}</div>
+          {chart(m, [s => (m === 'netRx' ? s.network?.rx : s.network?.tx) ?? null], [t(m)], undefined, n => rate(n, m, true))}<p className="mp-note">{sample.network.interfaces.join(', ')}</p>
+        </>;
+        case 'diskRx': case 'diskWx': return !sample.diskIO ? unavailable : <>
+          <div className="mp-value">{rate(m === 'diskRx' ? sample.diskIO.read : sample.diskIO.write, m)}</div>
+          {chart(m, [s => (m === 'diskRx' ? s.diskIO?.read : s.diskIO?.write) ?? null], [t(m)], undefined, n => rate(n, m))}
+        </>;
+        case 'osDistro': return <div className="mp-value">{sample.host.distro}<small>{sample.host.release} · {sample.host.arch}</small></div>;
+        case 'uptime': return <div className="mp-value">{formatUptime(sample.host.uptime, prefs.uptimeFormat)}</div>;
         case 'memory': return !sample.memory ? unavailable : <>
-          <div className="mp-value">{bytes(sample.memory.used)}<small> / {bytes(sample.memory.total)}</small></div>
-          {row(t('active'), bytes(sample.memory.active))}{row(t('available'), bytes(sample.memory.available))}{row(t('swap'), `${bytes(sample.memory.swapUsed)} / ${bytes(sample.memory.swapTotal)}`)}
-          {chart([s => s.memory ? s.memory.used / s.memory.total * 100 : null, s => s.memory?.active !== null && s.memory?.active !== undefined ? s.memory.active / s.memory.total * 100 : null], [t('used'), t('active')], 100)}
+          <div className="mp-value">{bytes(sample.memory.used, m)}<small> / {bytes(sample.memory.total, m)}</small></div>
+          {row(t('active'), bytes(sample.memory.active, m))}{row(t('available'), bytes(sample.memory.available, m))}{row(t('swap'), `${bytes(sample.memory.swapUsed, m)} / ${bytes(sample.memory.swapTotal, m)}`)}
+          {chart(m, [s => s.memory ? s.memory.used / s.memory.total * 100 : null, s => s.memory?.active !== null && s.memory?.active !== undefined ? s.memory.active / s.memory.total * 100 : null], [t('used'), t('active')], 100)}
         </>;
         case 'network': return !sample.network ? unavailable : <>
-          {row(`↓ ${t('download')}`, rate(sample.network.rx, true))}{row(`↑ ${t('upload')}`, rate(sample.network.tx, true))}
-          {chart([s => s.network?.rx ?? null, s => s.network?.tx ?? null], [t('download'), t('upload')], undefined, n => rate(n, true))}
+          {row(`↓ ${t('download')}`, rate(sample.network.rx, m, true))}{row(`↑ ${t('upload')}`, rate(sample.network.tx, m, true))}
+          {chart(m, [s => s.network?.rx ?? null, s => s.network?.tx ?? null], [t('download'), t('upload')], undefined, n => rate(n, m, true))}
           <p className="mp-note">{sample.network.interfaces.join(', ')}</p>
         </>;
         case 'diskIO': return !sample.diskIO ? unavailable : <>
-          {row(t('read'), rate(sample.diskIO.read))}{row(t('write'), rate(sample.diskIO.write))}
-          {chart([s => s.diskIO?.read ?? null, s => s.diskIO?.write ?? null], [t('read'), t('write')], undefined, n => rate(n))}
+          {row(t('read'), rate(sample.diskIO.read, m))}{row(t('write'), rate(sample.diskIO.write, m))}
+          {chart(m, [s => s.diskIO?.read ?? null, s => s.diskIO?.write ?? null], [t('read'), t('write')], undefined, n => rate(n, m))}
         </>;
         case 'diskSpace': return !sample.disks.length ? unavailable : <>{sample.disks.map(d => <div key={`${d.fs}:${d.mount}`} className="mp-disk">
-          {row(d.mount, number(d.use, '%'))}<div className="mp-meter"><i style={{ width: `${d.use}%` }} /></div><p className="mp-note">{bytes(d.used)} / {bytes(d.size)} · {d.fs}</p>
+          {row(d.mount, number(d.use, m, '%'))}<div className="mp-meter"><i style={{ width: `${d.use}%` }} /></div><p className="mp-note">{bytes(d.used, m)} / {bytes(d.size, m)} · {d.fs}</p>
         </div>)}</>;
         case 'battery': return !sample.battery ? unavailable : <>
-          <div className="mp-value">{number(sample.battery.percent, '%')}<small>{t(sample.battery.charging ? 'charging' : sample.battery.acConnected ? 'plugged' : 'discharging')}</small></div>
-          {row(t('health'), number(sample.battery.health, '%'))}{row(t('remaining'), sample.battery.timeRemaining === null ? '—' : `${Math.round(sample.battery.timeRemaining)} ${t('minutes')}`)}
-          {chart([s => s.battery?.percent ?? null], [t('battery')], 100)}
+          <div className="mp-value">{number(sample.battery.percent, m, '%')}<small>{t(sample.battery.charging ? 'charging' : sample.battery.acConnected ? 'plugged' : 'discharging')}</small></div>
+          {row(t('health'), number(sample.battery.health, m, '%'))}{row(t('remaining'), !sample.battery.timeRemaining || sample.battery.timeRemaining >= 2880 || sample.battery.state === 'idle' ? '—' : `${Math.round(sample.battery.timeRemaining)} ${t('minutes')}`)}
+          {row(t('cycles'), number(sample.battery.cycleCount, m))}{row(t('capacity'), `${number(sample.battery.currentCapacity, m)} / ${number(sample.battery.maxCapacity, m)} ${sample.battery.capacityUnit ?? ''}`)}{row(t('voltage'), number(sample.battery.voltage, m, ' V'))}
+          {(sample.battery.model || sample.battery.manufacturer) && <p className="mp-note">{sample.battery.manufacturer} {sample.battery.model}</p>}
+          {chart(m, [s => s.battery?.percent ?? null], [t('battery')], 100)}
         </>;
-        case 'cpuSpeed': return sample.cpuSpeed === null ? unavailable : <><div className="mp-value">{number(sample.cpuSpeed, ' GHz')}</div>{chart([s => s.cpuSpeed], [t('cpuSpeed')], undefined, n => number(n, ' GHz'))}</>;
-        case 'cpuTemp': return sample.cpuTemp === null ? unavailable : <><div className="mp-value">{number(sample.cpuTemp, ' °C')}</div>{chart([s => s.cpuTemp], [t('cpuTemp')], undefined, n => number(n, ' °C'))}</>;
-        case 'power': return !sample.power ? unavailable : <><div className="mp-value">{number(sample.power.watts, ' W')}</div>{chart([s => s.power?.watts ?? null], [metric('power')], undefined, n => number(n, ' W'))}</>;
-        case 'gpu': return !sample.gpus.length ? unavailable : <>{sample.gpus.map((gpu, i) => <div key={`${gpu.model}:${i}`} className="mp-gpu">
-          <h3>{gpu.model}</h3><div className="mp-value">{number(gpu.utilization, '%')}<small>{number(gpu.temperature, ' °C')}</small></div>
-          {row(t('vram'), gpu.memTotal === null ? '—' : `${bytes(gpu.memUsed)} / ${bytes(gpu.memTotal)}`)}
-          {chart([s => s.gpus[i]?.utilization ?? null], [gpu.model], 100)}
-        </div>)}</>;
+        case 'cpuSpeed': case 'cpuTemp': {
+          const speed = m === 'cpuSpeed', value = speed ? sample.cpuSpeed : sample.cpuTemp, suffix = speed ? ' GHz' : ' °C', values = speed ? sample.cpuSpeedCores : sample.cpuTempCores;
+          return value === null ? unavailable : <><div className="mp-value">{number(value, m, suffix)}</div>
+            {speed && row(t('minimum'), number(sample.cpuSpeedMin, m, suffix))}{row(t('maximum'), number(speed ? sample.cpuSpeedMax : sample.cpuTempMax, m, suffix))}
+            {prefs.modes[m] === 'array' && values.length ? chart(m, values.map((_, i) => s => (speed ? s.cpuSpeedCores : s.cpuTempCores)[i] ?? null), values.map((_, i) => `${t('core')} ${i + 1}`), undefined, n => number(n, m, suffix)) : chart(m, [s => speed ? s.cpuSpeed : s.cpuTemp], [t(m)], undefined, n => number(n, m, suffix))}
+          </>;
+        }
+        case 'batteryPower': case 'power': return !sample.power ? unavailable : <><div className="mp-value">{number(sample.power.watts, m, ' W')}</div>{chart(m, [s => s.power?.watts ?? null], [metric(m)], undefined, n => number(n, m, ' W'))}</>;
+        case 'gpu': case 'gpuTemp': case 'gpuMem': {
+          if (!sample.gpus.length) return unavailable;
+          const aggregate = aggregateGpu(sample.gpus), pick = (s: Sample) => { const a = aggregateGpu(s.gpus); return m === 'gpu' ? a.utilization : m === 'gpuTemp' ? a.temperature : a.memPercent; }, suffix = m === 'gpuTemp' ? ' °C' : '%';
+          return <><div className="mp-value">{m === 'gpuMem' ? <>{bytes(aggregate.memUsed, m)}<small> / {bytes(aggregate.memTotal, m)}</small></> : number(pick(sample), m, suffix)}</div>
+            {prefs.modes[m] === 'array' ? chart(m, sample.gpus.map((_, i) => s => { const g = s.gpus[i]; return !g ? null : m === 'gpu' ? g.utilization : m === 'gpuTemp' ? g.temperature : g.memUsed !== null && g.memTotal ? g.memUsed / g.memTotal * 100 : null; }), sample.gpus.map(g => g.model), m === 'gpuTemp' ? undefined : 100, n => number(n, m, suffix)) : chart(m, [pick], [t(m)], m === 'gpuTemp' ? undefined : 100, n => number(n, m, suffix))}
+            {sample.gpus.map((gpu, i) => <div key={`${gpu.model}:${i}`} className="mp-gpu">{row(gpu.model, m === 'gpu' ? number(gpu.utilization, m, '%') : m === 'gpuTemp' ? number(gpu.temperature, m, ' °C') : `${bytes(gpu.memUsed, m)} / ${bytes(gpu.memTotal, m)}`)}</div>)}
+          </>;
+        }
       }
     }
     const change = (patch: Partial<ViewPreferences>) => setPrefs(p => ({ ...p, ...patch }));
@@ -164,22 +206,34 @@ export function apply(ctx: any): void {
         <button onClick={() => setPaused(p => !p)}>{t(paused ? 'resume' : 'pause')}</button><button onClick={() => setSettings(p => !p)} aria-expanded={settings}>{t(settings ? 'close' : 'settings')}</button><button onClick={download} disabled={!data}>{t('export')}</button>
       </div></header>
       <div className="mp-meta"><span className={`mp-status mp-status-${status}`} role="status"><i />{t(status)}</span>
-        {sample && <><span>{t('host')}: {sample.host.hostname} · {sample.host.platform}/{sample.host.arch}</span><span>{t('uptime')}: {formatUptime(sample.host.uptime)}</span><span>{t('time')}: {new Date(sample.timestamp).toLocaleTimeString()}</span></>}
+        {sample && <><span>{t('host')}: {sample.host.hostname} · {sample.host.platform}/{sample.host.arch}</span><span>{t('uptime')}: {formatUptime(sample.host.uptime, prefs.uptimeFormat)}</span><span>{t('time')}: {new Date(sample.timestamp).toLocaleTimeString()}</span></>}
         {data && <><span>{t('source')}: {data.config.source}</span><span>{t('interval')}: {data.config.intervalMs / 1000} {t('seconds')}</span><span>{t('history')}: {history.length} {t('samples')}</span></>}
       </div>
       {(transportError || data?.error) && <div className="mp-error" role="alert"><span>{transportError ?? data?.error}</span><button onClick={() => { cursor.current = 0; setRefresh(n => n + 1); }}>{t('retry')}</button></div>}
+      {!dismissed && data?.backend?.source === 'mactop' && ['missing', 'failed', 'installing'].includes(data.backend.status) && <section className="mp-settings" aria-label="mactop">
+        <h2>{t(data.backend.status === 'installing' ? 'installing' : data.backend.status === 'missing' ? 'missing' : 'error')}</h2>
+        <p>{t('installHelp')}</p>{!data.backend.canInstall && data.backend.status === 'missing' && <p>{t('brewHelp')}</p>}
+        <div className="mp-toolbar"><button disabled={backendBusy || data.backend.status === 'installing' || !data.backend.canInstall} onClick={() => void backendAction('install')}>{t('install')}</button><button disabled={backendBusy || data.backend.status === 'installing'} onClick={() => void backendAction('retry')}>{t('retry')}</button><button disabled={backendBusy} onClick={() => void backendAction('use-si')}>{t('useSI')}</button><button onClick={() => setDismissed(true)}>{t('dismiss')}</button></div>
+        {data.backend.log && <details><summary>{t('installOutput')}</summary><pre className="mp-backend-log">{data.backend.log}</pre></details>}
+      </section>}
       {settings && <section className="mp-settings" aria-label={t('settings')}>
         <div className="mp-options"><label>{t('unit')}<select value={prefs.unit} onChange={e => change({ unit: e.target.value as ViewPreferences['unit'] })}><option value="binary">{t('binary')}</option><option value="decimal">{t('decimal')}</option></select></label>
+          <label>{t('precision')}<select value={prefs.precision} onChange={e => change({ precision: e.target.value as ViewPreferences['precision'] })}><option value="significant">{t('significant')}</option><option value="decimals">{t('fixed')}</option></select></label>
           <label>{t('decimals')}<select value={prefs.decimals} onChange={e => change({ decimals: Number(e.target.value) })}>{[0, 1, 2, 3].map(n => <option key={n}>{n}</option>)}</select></label>
           <label>{t('networkUnit')}<select value={prefs.networkUnit} onChange={e => change({ networkUnit: e.target.value as ViewPreferences['networkUnit'] })}><option value="bytes">{t('bytes')}</option><option value="bits">{t('bits')}</option></select></label>
           <label className="mp-checkbox"><input type="checkbox" checked={prefs.cores} onChange={e => change({ cores: e.target.checked })} />{t('cores')}</label>
+          <label className="mp-checkbox"><input type="checkbox" checked={prefs.showSpace} onChange={e => change({ showSpace: e.target.checked })} />{t('showSpace')}</label><label className="mp-checkbox"><input type="checkbox" checked={prefs.singleUnit} onChange={e => change({ singleUnit: e.target.checked })} />{t('singleUnit')}</label>
+          <label>{t('uptimeFormat')}<input value={prefs.uptimeFormat} maxLength={100} onChange={e => change({ uptimeFormat: e.target.value })} /></label>
         </div>
+        {data?.config.source === 'systeminformation' && sample?.host.platform === 'darwin' && sample.host.arch === 'arm64' && <button disabled={backendBusy} onClick={() => void backendAction('enable-mactop')}>{t('enableMactop')}</button>}
         <h2>{t('visible')} · {t('order')}</h2><div className="mp-order">{prefs.order.map((m, i) => <div key={m}>
           <label><input type="checkbox" checked={!prefs.hidden.includes(m)} onChange={e => change({ hidden: e.target.checked ? prefs.hidden.filter(x => x !== m) : [...prefs.hidden, m] })} />{t(m)}</label>
+          {!['osDistro', 'uptime', 'diskSpace'].includes(m) && <><label>{t('chartMode')}<select value={prefs.modes[m] ?? 'line'} onChange={e => change({ modes: { ...prefs.modes, [m]: e.target.value as ChartMode } })}>{(['line', 'bar', ...(['cpu', 'cpuTemp', 'cpuSpeed', 'gpu', 'gpuTemp', 'gpuMem'].includes(m) ? ['array'] : [])] as ChartMode[]).map(mode => <option key={mode} value={mode}>{t(mode)}</option>)}</select></label><label>{t('color')}<input type="color" value={prefs.colors[m] ?? '#67b9ed'} onChange={e => change({ colors: { ...prefs.colors, [m]: e.target.value } })} /></label></>}
+          <label>{t('digits')}<select value={prefs.significantDigits[m] ?? 3} onChange={e => change({ significantDigits: { ...prefs.significantDigits, [m]: Number(e.target.value) } })}>{[1, 2, 3, 4, 5, 6].map(n => <option key={n}>{n}</option>)}</select></label>
           <button disabled={i === 0} onClick={() => move(i, -1)} aria-label={`${t('up')} ${t(m)}`}>↑</button><button disabled={i === prefs.order.length - 1} onClick={() => move(i, 1)} aria-label={`${t('down')} ${t(m)}`}>↓</button>
         </div>)}</div><p className="mp-note">{t('configuration')}</p><button onClick={() => setPrefs(defaultPreferences())}>{t('reset')}</button>
       </section>}
-      {!sample ? <p className="mp-empty">{t('loading')}</p> : <div className="mp-cards">{prefs.order.filter(m => data?.config.metrics.includes(m) && !prefs.hidden.includes(m)).map(m => <section className="mp-card" key={m}><h2>{metric(m, m === 'cpuTemp' && data?.config.source === 'mactop' ? 'SoC' : undefined)}</h2>{content(m)}</section>)}</div>}
+      {!sample ? <p className="mp-empty">{t('loading')}</p> : <div className="mp-cards">{prefs.order.filter(m => visibleCards(data?.config.metrics ?? []).includes(m) && !prefs.hidden.includes(m)).map(m => <section className="mp-card" key={m}><h2>{metric(m, m === 'cpuTemp' && data?.config.source === 'mactop' ? 'SoC' : undefined)}</h2>{content(m)}</section>)}</div>}
       {data && !data.config.metrics.length && <p className="mp-empty">{t('disabled')}</p>}
       {data && <footer className="mp-note">{t(data.config.source === 'go' ? 'goNote' : data.config.source === 'mactop' ? 'mactopNote' : 'networkNote')}</footer>}
     </div>;

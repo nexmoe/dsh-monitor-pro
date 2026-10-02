@@ -8,28 +8,28 @@ Live host resource monitoring for **DeepSeek Harness**, adapted from [VS Code Mo
 
 [简体中文](README.md) · [Releases](https://github.com/nexmoe/dsh-monitor-pro/releases/latest) · [Feature comparison (Chinese)](docs/COMPARISON.md) · [Changelog](CHANGELOG.md)
 
-Package: `@nexmoe/dsh-monitor-pro` · Version: `0.1.2` · License: Apache-2.0.
+Package: `@nexmoe/dsh-monitor-pro` · Version: `0.1.3` · License: Apache-2.0.
 
 Readings describe the machine running **Harness Host**. A remote browser may be running on a different machine.
 
 ## Features
 
 - Native React main panel and sidebar entry, responsive layout and Harness theme integration.
-- Ten resource groups: CPU, memory, network, disk I/O, disk capacity, battery, CPU frequency, temperature, GPU and power.
-- Per-core CPU usage; used/active/available memory and swap; per-GPU utilization history with temperature and VRAM readings.
-- Bounded history, gaps for unavailable measurements, signed battery power and a zero reference line.
-- Card ordering and visibility, binary/decimal capacity units, byte/bit network units and decimal precision.
+- Seventeen cards: CPU, active and used memory, network receive/transmit, disk read/write, battery, battery power, CPU temperature and frequency, GPU utilization, temperature and VRAM, disk capacity, OS information and uptime.
+- Per-core CPU usage; used/active/available memory and swap; separate GPU utilization, temperature and VRAM history.
+- Line, bar and per-core array modes, gaps for unavailable measurements, signed battery power and a zero reference line.
+- Card ordering and visibility, significant digits, unit spacing, compact units, capacity units, byte/bit network units and uptime templates.
 - Pause/resume display, collection status and errors, sample time, JSON export of the snapshot, displayed history and configuration.
 - Shared Host Worker and cache; optional `monitor_snapshot` Agent tool.
 - English, Simplified Chinese, Traditional Chinese and Japanese.
 
-The VS Code status bar, line/bar view switching, per-core temperatures, separate GPU temperature/VRAM history and native backend installation/process management have not been ported.
+Windows automatically uses the bundled Go backend. Apple Silicon enables and manages mactop by default. Other platforms use systeminformation. The VS Code status bar has not been ported.
 
 ## Install
 
 Requires **Node.js 22+**. Runtime APIs and HTTP integration have been verified with **DeepSeek Harness 0.2.0-rc.2**. Other versions must provide compatible Cordis bundle, Client ModuleLoader, layout/sidebar and Locale APIs.
 
-1. Download `nexmoe-dsh-monitor-pro-0.1.2.tgz` from [GitHub Releases](https://github.com/nexmoe/dsh-monitor-pro/releases/latest).
+1. Download `nexmoe-dsh-monitor-pro-0.1.3.tgz` from [GitHub Releases](https://github.com/nexmoe/dsh-monitor-pro/releases/latest).
 2. Open Harness **Plugins → Install plugin** and enter the downloaded file's **absolute path**.
 3. Open **Monitor Pro** in the sidebar. The first sample may take a few seconds.
 4. When replacing an installed version, **fully quit and restart Harness** to load the new Host and Client modules.
@@ -44,24 +44,28 @@ Edit Monitor Pro's Host plugin configuration. Reloading configuration starts a n
 
 | Field | Default | Meaning |
 | --- | --- | --- |
-| `intervalMs` | `2000` | Integer sampling interval, 1000–60000 ms |
+| `intervalMs` | `2000` | Integer sampling interval, 500–60000 ms |
 | `historySize` | `60` | Integer history capacity, 10–600 samples |
-| `metrics` | All | Enabled metric IDs; an empty list disables metric collection |
-| `source` | `systeminformation` | `systeminformation`, `mactop` or `go` |
-| `backendUrl` | `http://127.0.0.1:8888` | Running native backend's HTTP origin; loopback only |
+| `metrics` | 17 default cards | Enabled metric IDs; an empty list disables metric collection |
+| `source` | `auto` | `auto`, `systeminformation`, `mactop` or `go` |
+| `mactopEnabled` | `true` | Whether automatic mode may use managed mactop on Apple Silicon |
+| `backendUrl` | `""` | Advanced override for a running loopback origin; empty lets the plugin manage it |
 | `networkInterface` | `""` | SI interface name; empty sums active non-loopback interfaces |
 | `diskMounts` | `[]` | Mount selection; empty uses deduplicated automatic selection |
 
 Metric IDs:
 
 ```text
-cpu memory network diskIO diskSpace battery cpuSpeed cpuTemp gpu power
+cpu memActive memUsed netRx netTx diskRx diskWx battery batteryPower
+cpuTemp cpuSpeed gpu gpuTemp gpuMem diskSpace osDistro uptime
 ```
+
+Legacy group IDs such as `memory`, `network`, `diskIO`, `gpu` and `power` still expand to their cards.
 
 ```yaml
 intervalMs: 2000
 historySize: 120
-source: systeminformation
+source: auto
 metrics: [cpu, memory, network]
 networkInterface: en0
 diskMounts: []
@@ -71,7 +75,7 @@ Host settings affect all windows. Display preferences are browser-local. Hiding 
 
 ## Data sources
 
-| Reading | systeminformation (default) | mactop | Original Go backend |
+| Reading | systeminformation | mactop (Apple Silicon default) | Bundled Go backend (Windows default) |
 | --- | --- | --- | --- |
 | CPU / memory | Supported; per-core CPU | Supported; active memory uses used memory | Supported; no per-core CPU |
 | Network / disk I/O | Active interface sum / SI aggregate | Backend rates | First eligible interface / disk |
@@ -81,7 +85,9 @@ Host settings affect all windows. Display preferences are browser-local. Hiding 
 | GPU | NVIDIA via nvidia-smi | Apple Silicon utilization/temperature, no VRAM | Unavailable |
 | Power | Unavailable | Total SoC power | Signed battery net power |
 
-The default source needs no extra service. Apple Silicon GPU and SoC power require an externally running [mactop](https://github.com/metaspartan/mactop) Prometheus service: set `source: mactop` and its origin as `backendUrl`; the plugin reads `/metrics`. The Go source requires an externally running [original Go HTTP backend](https://github.com/nexmoe/vscode-monitor-pro/tree/main/go-backend), queried at `/api/v1/all`. Native executables are not bundled, installed or managed.
+`auto` selects the bundled Go backend on Windows, managed mactop on Apple Silicon, and systeminformation elsewhere. An explicit source is always respected. A native failure keeps its error and the last successful sample; it does not silently switch to systeminformation. The panel can retry or explicitly switch.
+
+The release includes Windows x64 and ARM64 Go executables. The plugin chooses a free `127.0.0.1` port, starts and stops the process, and reads `/api/v1/all`. On Apple Silicon, the panel offers `brew install mactop` when [mactop](https://github.com/context-labs/mactop) is absent, then starts it headless with Prometheus bound to `127.0.0.1` and reads `/metrics`. `backendUrl` connects to a service you manage; the plugin does not start or stop that process.
 
 Explicit native sources do not silently switch after failures. The last successful sample and its timestamp remain visible with an error. SI dimension failures produce nullable readings and a partial failure status. Unsupported values display `—`. The first Go rate and rates following counter resets remain unavailable until a valid delta exists.
 

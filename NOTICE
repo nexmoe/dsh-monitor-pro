@@ -15,9 +15,15 @@ Pure modules from the upstream project are vendored under src/upstream:
 - prometheusParser.ts: original src/mactop-backend/prometheusParser.ts parser.
 
 The Harness lifecycle, worker service, authenticated RPC route, React dashboard,
-preferences, Agent integration, packaging, documentation and tests are new in
-this adaptation. Native backends are opt-in and externally managed.
+preferences, Agent integration, managed backend supervisor, packaging,
+documentation and tests are new in this adaptation.
+
+The bundled Windows Go collector is built from the upstream Go sources copied
+under native/. Those sources retain their original attribution. Their compiled
+dependencies, licenses and notices are listed in native/THIRD_PARTY_NOTICES.txt.
+The Darwin binary is a local verification artifact and is not shipped. mactop
+itself is not bundled: on Apple Silicon the plugin can install it with Homebrew
+and starts it bound to 127.0.0.1.
 
 systeminformation is distributed as an external npm dependency under its own
 MIT license. DeepSeek Harness runtime packages retain their own licenses.
-Native mactop/Go executables are not included in this package.

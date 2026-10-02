@@ -1,6 +1,10 @@
 import { Worker } from 'node:worker_threads';
 import { randomUUID } from 'node:crypto';
-import { normalizeConfig, type MonitorConfig, type Payload, type Sample } from './types.js';
+import { normalizeConfig, selectSource, type MonitorConfig, type Payload, type Sample } from './types.js';
+import { BackendManager } from './backend.js';
+import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 export interface CollectorRunner { collect(config: MonitorConfig): Promise<Sample>; dispose(): Promise<void> }
 export class WorkerRunner implements CollectorRunner {
   private worker: Worker | null = null;
@@ -54,7 +58,11 @@ export class WorkerRunner implements CollectorRunner {
 }
 export class MonitorService {
   readonly config: MonitorConfig;
-  private readonly generation = randomUUID();
+  private generation = randomUUID();
+  private backend: BackendManager;
+  private initialization: Promise<void> | null = null;
+  private actions: Promise<void> = Promise.resolve();
+  private transitioning = false;
   private history: Sample[] = [];
   private timer: ReturnType<typeof setTimeout> | null = null;
   private stopped = false;
@@ -63,7 +71,46 @@ export class MonitorService {
   private status: Payload['status'] = 'starting';
   private error: string | null = null;
   private lastAttempt: number | null = null;
-  constructor(config: Partial<MonitorConfig>, private readonly runner: CollectorRunner = new WorkerRunner()) { this.config = normalizeConfig(config); }
+  constructor(config: Partial<MonitorConfig>, private readonly runner: CollectorRunner = new WorkerRunner(), private readonly preferencesPath = join(homedir(), '.dsh', 'monitor-pro', 'preferences.json')) { this.config = normalizeConfig(config); this.backend = new BackendManager(this.config); }
+  private initialize(): Promise<void> {
+    return this.initialization ??= (async () => {
+      if (this.config.source !== 'auto' || this.stopped) return;
+      let value: { mactopEnabled?: boolean };
+      try { value = JSON.parse(await readFile(this.preferencesPath, 'utf8')); } catch { return; }
+      if (value.mactopEnabled === false && this.config.mactopEnabled && !this.stopped) {
+        this.config.mactopEnabled = false;
+        await this.backend.dispose();
+        if (!this.stopped) this.backend = new BackendManager(this.config);
+      }
+    })();
+  }
+  action(action: 'install' | 'retry' | 'use-si' | 'enable-mactop'): Promise<void> {
+    const next = this.actions.then(() => this.performAction(action));
+    this.actions = next.catch(() => {}); return next;
+  }
+  private async performAction(action: 'install' | 'retry' | 'use-si' | 'enable-mactop'): Promise<void> {
+    if (this.stopped) throw new Error('Monitor is stopped');
+    await this.initialize();
+    if (this.stopped) throw new Error('Monitor is stopped');
+    if (action === 'install') { await this.backend.install(); return; }
+    if (action === 'retry') { await this.backend.retry(); await this.sample(); return; }
+    this.transitioning = true;
+    try {
+      if (this.timer) clearTimeout(this.timer); this.timer = null;
+      await this.inFlight;
+      if (this.stopped) throw new Error('Monitor is stopped');
+      const enabled = action === 'enable-mactop';
+      await mkdir(join(this.preferencesPath, '..'), { recursive: true });
+      await writeFile(this.preferencesPath, JSON.stringify({ mactopEnabled: enabled }), { mode: 0o600 });
+      await this.backend.dispose();
+      if (this.stopped) throw new Error('Monitor is stopped');
+      this.config.source = enabled ? 'auto' : 'systeminformation';
+      this.config.mactopEnabled = enabled; this.config.backendUrl = '';
+      this.backend = new BackendManager(this.config);
+      this.history = []; this.generation = randomUUID();
+    } finally { this.transitioning = false; }
+    await this.sample();
+  }
   start(): void {
     if (this.started || this.stopped) return;
     this.started = true;
@@ -75,11 +122,17 @@ export class MonitorService {
     this.timer.unref?.();
   }
   sample(): Promise<void> {
-    if (this.stopped) return Promise.resolve();
+    if (this.stopped || this.transitioning) return this.inFlight ?? Promise.resolve();
     if (this.inFlight) return this.inFlight;
     this.lastAttempt = Date.now();
     const started = this.lastAttempt;
-    this.inFlight = Promise.resolve().then(() => this.runner.collect(this.config)).then(sample => {
+    this.inFlight = Promise.resolve().then(async () => {
+      await this.initialize();
+      const source = selectSource(this.config);
+      const backendUrl = this.config.metrics.length && source !== 'systeminformation' ? await this.backend.endpoint() : this.config.backendUrl;
+      if (this.stopped) throw new Error('Monitor is stopped');
+      return this.runner.collect({ ...this.config, source, backendUrl });
+    }).then(sample => {
       if (this.stopped) return;
       this.history.push(sample);
       if (this.history.length > this.config.historySize) this.history.splice(0, this.history.length - this.config.historySize);
@@ -91,7 +144,7 @@ export class MonitorService {
       this.error = error instanceof Error ? error.message : String(error);
     }).finally(() => {
       this.inFlight = null;
-      if (this.started) this.schedule(Math.max(100, this.config.intervalMs - (Date.now() - started)));
+      if (this.started && !this.transitioning) this.schedule(Math.max(100, this.config.intervalMs - (Date.now() - started)));
     });
     return this.inFlight;
   }
@@ -99,7 +152,7 @@ export class MonitorService {
     // A browser can miss the empty snapshot during a fast reload. Resetting the
     // delta cursor here keeps samples from different collectors out of one graph.
     if (generation !== undefined && generation !== this.generation) since = 0;
-    return { generation: this.generation, config: this.config, current: this.history.at(-1) ?? null, history: this.history.filter(s => s.timestamp > since), status: this.status, error: this.error, lastAttempt: this.lastAttempt };
+    return { generation: this.generation, config: { ...this.config, source: selectSource(this.config) }, backend: { ...this.backend.state }, current: this.history.at(-1) ?? null, history: this.history.filter(s => s.timestamp > since), status: this.status, error: this.error, lastAttempt: this.lastAttempt };
   }
   async dispose(): Promise<void> {
     this.stopped = true;
@@ -107,6 +160,7 @@ export class MonitorService {
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
     await this.runner.dispose();
-    await this.inFlight;
+    await this.backend.dispose();
+    await this.inFlight; await this.initialization; await this.actions;
   }
 }

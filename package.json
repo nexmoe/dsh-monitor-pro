@@ -1,6 +1,6 @@
 {
   "name": "@nexmoe/dsh-monitor-pro",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Real-time host resource monitoring for DeepSeek Harness",
   "type": "module",
   "license": "Apache-2.0",
@@ -12,7 +12,7 @@
     "./package.json": "./package.json",
     "./locale/*.json": "./locale/*.json"
   },
-  "files": ["dist", "locale", "icon.svg", "cordis.patch.yml", "README.md", "README.en.md", "docs", "CHANGELOG.md", "NOTICE", "LICENSE"],
+  "files": ["dist", "locale", "icon.svg", "cordis.patch.yml", "README.md", "README.en.md", "docs", "CHANGELOG.md", "NOTICE", "LICENSE", "native/bin/win32-x64", "native/bin/win32-arm64", "native/README.md", "native/THIRD_PARTY_NOTICES.txt", "native/LICENSES"],
   "dsh": {
     "bundle": { "patch": "./cordis.patch.yml" },
     "client": {
@@ -23,6 +23,8 @@
   },
   "scripts": {
     "build": "node scripts/build.mjs",
+    "build:native": "node scripts/build-native.mjs",
+    "prepack": "node scripts/verify-package.mjs",
     "typecheck": "tsc --noEmit",
     "test": "node --test test/*.test.mjs",
     "check": "pnpm build && pnpm typecheck && pnpm test",

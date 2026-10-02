@@ -1,0 +1,52 @@
+github.com/ebitengine/purego v0.10.0
+
+The following source copyright notices are retained for the Apache-2.0 code:
+
+SPDX-FileCopyrightText: 2022 The Ebitengine Authors
+SPDX-FileCopyrightText: 2023 The Ebitengine Authors
+SPDX-FileCopyrightText: 2024 The Ebitengine Authors
+SPDX-FileCopyrightText: 2025 The Ebitengine Authors
+SPDX-FileCopyrightText: 2026 The Ebitengine Authors
+
+The license text is reproduced verbatim in purego-LICENSE.txt.
+
+Upstream README.md "External Code" notice (verbatim):
+
+Purego uses code that originates from the Go runtime. These files are under the BSD-3
+License that can be found [in the Go Source](https://github.com/golang/go/blob/master/LICENSE).
+This is a list of the copied files:
+
+* `abi_*.h` from package `runtime/cgo`
+* `wincallback.go` from package `runtime`
+* `zcallback_darwin_*.s` from package `runtime`
+* `internal/fakecgo/abi_*.h` from package `runtime/cgo`
+* `internal/fakecgo/asm_GOARCH.s` from package `runtime/cgo`
+* `internal/fakecgo/callbacks.go` from package `runtime/cgo`
+* `internal/fakecgo/iscgo.go` from package `runtime/cgo`
+* `internal/fakecgo/setenv.go` from package `runtime/cgo`
+* `internal/fakecgo/freebsd.go` from package `runtime/cgo`
+* `internal/fakecgo/netbsd.go` from package `runtime/cgo`
+
+The `internal/fakecgo/go_GOOS.go` files were modified from `runtime/cgo/gcc_GOOS_GOARCH.go`.
+
+The files `abi_*.h` and `internal/fakecgo/abi_*.h` are the same because Bazel does not support cross-package use of
+`#include` so we need each one once per package. (cf. [issue](https://github.com/bazelbuild/rules_go/issues/3636))
+
+The Go-origin source files retain these original notices:
+
+Copyright 2009 The Go Authors. All rights reserved.
+Copyright 2010 The Go Authors. All rights reserved.
+Copyright 2011 The Go Authors. All rights reserved.
+Copyright 2012 The Go Authors. All rights reserved.
+Copyright 2014 The Go Authors. All rights reserved.
+Copyright 2015 The Go Authors. All rights reserved.
+Copyright 2016 The Go Authors. All rights reserved.
+Copyright 2020 The Go Authors. All rights reserved.
+Copyright 2021 The Go Authors. All rights reserved.
+Copyright 2022 The Go Authors. All rights reserved.
+Copyright 2023 The Go Authors. All rights reserved.
+
+Use of this source code is governed by a BSD-style
+license that can be found in the LICENSE file.
+
+The full BSD license for these Go-origin files is reproduced in go-LICENSE.txt.

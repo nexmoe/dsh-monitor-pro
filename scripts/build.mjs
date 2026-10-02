@@ -12,6 +12,8 @@ await Promise.all([
   build({ ...host, entryPoints: ['src/service.ts'], outfile: 'dist/service.js' }),
   build({ ...host, entryPoints: ['src/view.ts'], outfile: 'dist/view.js' }),
   build({ ...host, entryPoints: ['src/types.ts'], outfile: 'dist/types.js' }),
+  build({ ...host, entryPoints: ['src/backend.ts'], outfile: 'dist/backend.js' }),
+  build({ ...host, entryPoints: ['src/backend.guard.ts'], outfile: 'dist/backend.guard.js' }),
   build({ ...host, entryPoints: ['src/locales.ts'], outfile: 'dist/locales.js' }),
   build({
     absWorkingDir: root, entryPoints: ['src/client.tsx'], outfile: 'dist/client.js', bundle: true,

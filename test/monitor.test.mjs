@@ -13,25 +13,25 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 // rather than duplicating formatting/card implementation details.
 test('configuration rejects invalid cadence, source and non-loopback backends', () => {
   assert.equal(normalizeConfig().intervalMs, 2000);
-  for (const config of [{ intervalMs: 999 }, { intervalMs: 2000.5 }, { historySize: 601 }, { metrics: ['made-up'] }, { source: 'invalid' }, { source: 'go', backendUrl: 'https://example.com' }, { source: 'go', backendUrl: 'http://user:pass@localhost:8888' }, { source: 'go', backendUrl: 'http://127.0.0.1:8888/path' }]) assert.throws(() => normalizeConfig(config));
+  for (const config of [{ intervalMs: 499 }, { intervalMs: 2000.5 }, { historySize: 601 }, { metrics: ['made-up'] }, { source: 'invalid' }, { source: 'go', backendUrl: 'https://example.com' }, { source: 'go', backendUrl: 'http://user:pass@localhost:8888' }, { source: 'go', backendUrl: 'http://127.0.0.1:8888/path' }]) assert.throws(() => normalizeConfig(config));
   assert.equal(normalizeConfig({ source: 'go', backendUrl: 'http://[::1]:8888' }).source, 'go');
   assert.deepEqual(normalizeConfig({ metrics: [] }).metrics, []);
 });
 test('service coalesces callers, bounds history, preserves freshness on failure and stops', async () => {
   let pending, calls = 0, disposed = false;
   const runner = { collect: () => { calls++; return new Promise((resolve, reject) => { pending = { resolve, reject }; }); }, dispose: async () => { disposed = true; pending?.reject(new Error('disposed')); } };
-  const service = new MonitorService({ historySize: 10 }, runner);
+  const service = new MonitorService({ source: 'systeminformation', historySize: 10 }, runner);
   const a = service.sample(), b = service.sample();
-  assert.equal(a, b); await Promise.resolve(); assert.equal(calls, 1);
+  assert.equal(a, b); await pause(0); assert.equal(calls, 1);
   pending.resolve({ ...emptySample(), timestamp: 1 }); await a;
-  for (let i = 2; i <= 12; i++) { const cycle = service.sample(); await Promise.resolve(); pending.resolve({ ...emptySample(), timestamp: i }); await cycle; }
+  for (let i = 2; i <= 12; i++) { const cycle = service.sample(); await pause(0); pending.resolve({ ...emptySample(), timestamp: i }); await cycle; }
   assert.equal(service.snapshot().history.length, 10);
   assert.deepEqual(service.snapshot(10).history.map(s => s.timestamp), [11, 12]);
   assert.equal(service.snapshot(999, 'previous-collector').history.length, 10);
   assert.equal(service.snapshot(999, service.snapshot().generation).history.length, 0);
-  const failure = service.sample(); await Promise.resolve(); pending.reject(new Error('offline')); await failure;
+  const failure = service.sample(); await pause(0); pending.reject(new Error('offline')); await failure;
   assert.equal(service.snapshot().status, 'error'); assert.equal(service.snapshot().current.timestamp, 12);
-  const active = service.sample(); await Promise.resolve(); await service.dispose(); await active;
+  const active = service.sample(); await pause(0); await service.dispose(); await active;
   assert.equal(disposed, true); assert.equal(service.snapshot().status, 'stopped');
   const before = calls; await service.sample(); assert.equal(calls, before);
 });
@@ -50,25 +50,28 @@ test('unloading while worker is starting cannot leave a pending task', async () 
   await runner.dispose(); await rejected;
 });
 test('service records synchronous collector failures without rejecting callers', async () => {
-  const service = new MonitorService({}, { collect() { throw new Error('sync failure'); }, dispose: async () => {} });
+  const service = new MonitorService({ source: 'systeminformation' }, { collect() { throw new Error('sync failure'); }, dispose: async () => {} });
   await service.sample(); assert.equal(service.snapshot().status, 'error'); assert.equal(service.snapshot().error, 'sync failure');
   await service.dispose();
 });
 test('Host RPC and optional tool share cached state and own their lifecycle', async () => {
-  const disposers = []; let route, tool;
+  const disposers = []; let route, tool; const routes = new Map();
   const ctx = {
     effect(factory) { disposers.push(factory()); },
     connection: { fetch: { register(definition) {
-      assert.equal(definition.path, '/api/monitor-pro/snapshot');
-      route = async (method, payload) => (await definition.fetch(new Request('http://localhost/api/monitor-pro/snapshot', {
+      assert(['/api/monitor-pro/snapshot', '/api/monitor-pro/action'].includes(definition.path));
+      const call = async (method, payload) => (await definition.fetch(new Request('http://localhost/api/monitor-pro/snapshot', {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ type: 'client-request', rpcId: 'test', method, payload }),
       }))).json().then(envelope => envelope.result);
+      routes.set(definition.path, call);
+      if (definition.path.endsWith('/snapshot')) route = call;
     } } },
     inject(names, callback) { assert.deepEqual(names, ['tools']); callback({ tools: { register(definition) { tool = definition; } } }); },
   };
   try {
     apply(ctx, { metrics: [] });
+    assert.equal((await routes.get('/api/monitor-pro/action')('monitor-pro/action', { action: 'unknown' })).ok, false);
     assert.equal((await route('unknown', {})).ok, false);
     assert.equal((await route('monitor-pro/snapshot', { since: -1 })).ok, false);
     assert.equal((await route('monitor-pro/snapshot', { generation: 5 })).ok, false);
@@ -139,11 +142,11 @@ test('Go preserves missing CPU and first-sample rates; reset counters do not inv
 });
 test('all four translations have the same keys and corrupted preferences recover', () => {
   for (const dictionary of [zh, zhTw, ja]) assert.deepEqual(Object.keys(dictionary).sort(), Object.keys(en).sort());
-  assert.equal(parsePreferences({ order: ['cpu', 'cpu', 'unknown'], decimals: 100 }).order.length, 10);
+  assert.equal(parsePreferences({ order: ['cpu', 'cpu', 'unknown'], decimals: 100 }).order.length, 17);
   assert.equal(parsePreferences(null).decimals, 1);
   assert.equal(formatBytes(null, defaultPreferences()), '—');
-  assert.equal(formatBytes(1024, defaultPreferences()), '1.0 KiB');
-  assert.equal(formatBytes(125000, defaultPreferences(), true), '1.0 Mbit');
+  assert.equal(formatBytes(1024, defaultPreferences()), '1.00KiB');
+  assert.equal(formatBytes(125000, defaultPreferences(), true), '1.00Mbit');
   const path = chartPath([{ timestamp: 1, value: 30 }, { timestamp: 2, value: null }, { timestamp: 3, value: 40 }], 100);
   assert.equal(path.split('M').length - 1, 2); assert(!path.includes('L'));
   // Battery discharge is negative; it must be drawn below the zero line.

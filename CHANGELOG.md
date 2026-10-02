@@ -1,8 +1,23 @@
 # Changelog
 
-## [Unreleased]
+## [0.1.3] — 2026-10-02
 
-- Clarified that source builds require Node.js 22.13+ for pnpm 11; installed plugin runtime support remains Node.js 22+.
+### Added
+
+- Automatic source selection: bundled Go on Windows, managed mactop on Apple Silicon, and systeminformation elsewhere.
+- Managed start, stop, retry and failure reporting for the bundled Go collector and mactop, including a Homebrew install action.
+- Seventeen Monitor Pro cards, including split throughput, battery power, GPU temperature and VRAM, OS information and uptime.
+- Line, bar and per-core display modes, significant digits, unit spacing, compact units and uptime templates.
+
+### Changed
+
+- Managed mactop now binds directly to 127.0.0.1. A configured backendUrl remains an explicit advanced loopback override.
+- Native startup failures stay on the selected source instead of silently falling back.
+- Windows x64 and ARM64 Go binaries, their licenses and notices are included in the release package.
+
+### Fixed
+
+- Each card now formats and colors its own metric instead of inheriting the last rendered card.
 
 ## [0.1.2] — 2026-10-02
 

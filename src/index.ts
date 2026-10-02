@@ -1,15 +1,16 @@
 import z from '@deepseek-ai/schemastery';
 import { MonitorService } from './service.js';
-import { METRICS } from './types.js';
+import { METRICS, DEFAULT_METRICS } from './types.js';
 export const name = 'monitor-pro';
 export const inject = ['connection'];
 export const Config = z.object({
-  intervalMs: z.number().min(1000).max(60000).default(2000).description('采样间隔（毫秒） / Sampling interval in milliseconds'),
+  intervalMs: z.number().min(500).max(60000).default(2000).description('采样间隔（毫秒） / Sampling interval in milliseconds'),
   historySize: z.number().min(10).max(600).default(60).description('历史采样数 / Maximum history samples'),
-  metrics: z.array(z.union([...METRICS])).default([...METRICS]).description('启用的指标 / Enabled metrics'),
-  source: z.union(['systeminformation', 'mactop', 'go']).default('systeminformation').description('采集源 / Collector source'),
-  backendUrl: z.string().default('http://127.0.0.1:8888').description('已启动的本地原生后端 / Running loopback native backend'),
-  networkInterface: z.string().default('').description('网卡；空值汇总活动接口（SI） / Interface; empty sums active SI interfaces'),
+  metrics: z.array(z.union([...METRICS])).default([...DEFAULT_METRICS]).description('启用的指标 / Enabled metrics'),
+  source: z.union(['auto', 'systeminformation', 'mactop', 'go']).default('auto').description('自动：Windows Go；Apple Silicon mactop；其他 SI / Platform defaults'),
+  mactopEnabled: z.boolean().default(true).description('自动模式启用 mactop；面板可安装或停用 / Enable mactop in auto mode'),
+  backendUrl: z.string().default('').description('高级：覆盖自动管理的本地地址；通常留空 / Advanced loopback override; normally empty'),
+  networkInterface: z.string().default('').description('网卡；空值使用 SI 默认网卡，* 汇总 / SI default interface; * sums interfaces'),
   diskMounts: z.array(z.string()).default([]).description('磁盘挂载点；空值自动去重 / Mounts; empty deduplicates automatically'),
 });
 // Cordis owns the route, worker and timers. Config edits recreate one collector,
@@ -21,17 +22,22 @@ export function apply(ctx: any, config: any): void {
   // In 0.2.0-rc.2 custom rpc.handle channels try to read webServer in the
   // Connection owner's undeclared scope, even if this caller injects it.
   // Keep the public Connection RPC envelope so the browser can use rpc.call.
-  ctx.connection.fetch.register({
-    path: '/api/monitor-pro/snapshot', methods: ['POST'], requestBody: 'buffered',
+  for (const route of ['snapshot', 'action']) ctx.connection.fetch.register({
+    path: `/api/monitor-pro/${route}`, methods: ['POST'], requestBody: 'buffered',
     async fetch(request: Request): Promise<Response> {
       if (request.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase() !== 'application/json') return new Response('content type must be application/json', { status: 415 });
       let message: any;
       try { message = await request.json(); } catch { return new Response('body is not JSON', { status: 400 }); }
       const respond = (result: unknown): Response => Response.json({ type: 'server-response', rpcId: typeof message?.rpcId === 'string' ? message.rpcId : 'invalid-request', result });
       const fail = (text: string): Response => respond({ ok: false, error: { code: 'monitor/bad-request', message: text, details: {} } });
-      if (!message || message.type !== 'client-request' || typeof message.rpcId !== 'string' || message.method !== 'monitor-pro/snapshot') return fail('Invalid monitor RPC request');
+      if (!message || message.type !== 'client-request' || typeof message.rpcId !== 'string' || message.method !== `monitor-pro/${route}`) return fail('Invalid monitor RPC request');
       const payload = message.payload ?? {};
       if (typeof payload !== 'object' || Array.isArray(payload)) return fail('payload must be an object');
+      if (route === 'action') {
+        if (!['install', 'retry', 'use-si', 'enable-mactop'].includes(payload.action)) return fail('Unknown backend action');
+        try { await monitor.action(payload.action); return respond({ ok: true, value: monitor.snapshot() }); }
+        catch (error) { return respond({ ok: false, error: { code: 'monitor/backend', message: String(error), details: {} } }); }
+      }
       const { since, generation } = payload;
       if (generation !== undefined && typeof generation !== 'string') return fail('generation must be a string');
       if (since !== undefined && (typeof since !== 'number' || !Number.isFinite(since) || since < 0)) return fail('since must be a nonnegative timestamp');
